@@ -606,8 +606,8 @@ static bool create_3d_pipeline(Render3D* r3d) {
         .depthClampEnable = VK_FALSE,
         .rasterizerDiscardEnable = VK_FALSE,
         .polygonMode = VK_POLYGON_MODE_FILL,
-        .cullMode = VK_CULL_MODE_NONE,  // Disable culling for debugging
-        .frontFace = VK_FRONT_FACE_CLOCKWISE,
+        .cullMode = VK_CULL_MODE_BACK_BIT,
+        .frontFace = VK_FRONT_FACE_CLOCKWISE,  // Clockwise due to Y-flip in projection
         .lineWidth = 1.0f
     };
 
