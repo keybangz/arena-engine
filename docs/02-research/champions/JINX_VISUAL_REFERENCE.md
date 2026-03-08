@@ -384,11 +384,21 @@ Mana Cost Indicator:
 
 *Loading screen portrait - Used in champion select and game loading*
 
-### In-Game Model Reference
+### In-Game 3D Model
 
-![Jinx Centered Portrait](https://ddragon.leagueoflegends.com/cdn/img/champion/centered/Jinx_0.jpg)
+For the actual in-game 3D model, use the interactive model viewer:
 
-*Centered splash crop - Used for in-game shop and collection UI*
+**🔗 [View Jinx 3D Model (modelviewer.lol)](https://modelviewer.lol/model-viewer?id=222000)**
+
+The model viewer allows you to:
+- Rotate and zoom the 3D model
+- View all animations (idle, walk, attack, abilities, recall)
+- Switch between skins
+- Export model data
+
+![Jinx Model Viewer Preview](https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/champion-icons/222.png)
+
+*Champion icon - The in-game 3D model uses ~5,000 polygons with hand-painted textures*
 
 ### Ability Icons
 
