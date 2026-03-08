@@ -1,0 +1,4 @@
+#ifndef ARENA_COLLECTIONS_H
+#define ARENA_COLLECTIONS_H
+
+#endif
