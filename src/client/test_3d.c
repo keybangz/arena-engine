@@ -339,13 +339,16 @@ static void render(void) {
         return;  // Swapchain out of date, skip frame
     }
 
-    // Camera setup - looking at cubes from above and back
-    Vec3 cam_pos = vec3(0, 8, 20);
-    Vec3 target = vec3(0, 0, 0);
-    Vec3 up = vec3(0, 1, 0);
-    Mat4 view = mat4_look_at(cam_pos, target, up);
-    float aspect = (float)WINDOW_WIDTH / (float)WINDOW_HEIGHT;
-    Mat4 projection = mat4_perspective(60.0f * 3.14159f / 180.0f, aspect, 0.1f, 100.0f);
+    // Get camera matrices from ECS camera system
+    Mat4 view, projection;
+    Vec3 cam_pos;
+    if (!camera_system_get_matrices(scene.world, &view, &projection, &cam_pos)) {
+        // Fallback if no active camera
+        cam_pos = vec3(0, 8, 20);
+        view = mat4_look_at(cam_pos, vec3(0, 0, 0), vec3(0, 1, 0));
+        projection = mat4_perspective(60.0f * ARENA_DEG2RAD,
+                                      (float)WINDOW_WIDTH / (float)WINDOW_HEIGHT, 0.1f, 100.0f);
+    }
 
     // Submit 3D draw calls
     if (scene.meshes_initialized) {
