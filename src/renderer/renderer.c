@@ -1344,3 +1344,23 @@ void renderer_get_extent(Renderer* r, uint32_t* width, uint32_t* height) {
     if (width) *width = r->swapchain_extent.width;
     if (height) *height = r->swapchain_extent.height;
 }
+
+void* renderer_get_device(Renderer* r) {
+    return r ? (void*)r->device : NULL;
+}
+
+void* renderer_get_physical_device(Renderer* r) {
+    return r ? (void*)r->physical_device : NULL;
+}
+
+void* renderer_get_render_pass(Renderer* r) {
+    return r ? (void*)r->render_pass : NULL;
+}
+
+void* renderer_get_command_pool(Renderer* r) {
+    return r ? (void*)r->command_pool : NULL;
+}
+
+void* renderer_get_graphics_queue(Renderer* r) {
+    return r ? (void*)r->graphics_queue : NULL;
+}

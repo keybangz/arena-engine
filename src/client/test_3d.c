@@ -43,6 +43,7 @@ typedef struct TestScene {
     Arena* arena;
     World* world;
     Renderer* renderer;  // Vulkan renderer
+    Render3D render3d;   // 3D rendering system
 
     // Entities
     Entity camera_entity;
@@ -54,6 +55,7 @@ typedef struct TestScene {
     MeshManager mesh_manager;
     MeshHandle cube_mesh;
     MeshHandle plane_mesh;
+    bool meshes_initialized;
 
     // glTF loaded model
     GltfLoadResult gltf_box;
@@ -128,6 +130,27 @@ static bool init_scene(void) {
     }
     printf("Vulkan renderer created\n");
 
+    // Initialize mesh manager with Vulkan device
+    VkDevice device = (VkDevice)renderer_get_device(scene.renderer);
+    VkPhysicalDevice phys_device = (VkPhysicalDevice)renderer_get_physical_device(scene.renderer);
+    mesh_manager_init(&scene.mesh_manager, device, phys_device);
+    printf("Mesh manager initialized\n");
+
+    // Initialize 3D renderer
+    VkRenderPass render_pass = (VkRenderPass)renderer_get_render_pass(scene.renderer);
+    VkCommandPool command_pool = (VkCommandPool)renderer_get_command_pool(scene.renderer);
+    VkQueue graphics_queue = (VkQueue)renderer_get_graphics_queue(scene.renderer);
+    uint32_t width, height;
+    renderer_get_extent(scene.renderer, &width, &height);
+
+    if (!render3d_init(&scene.render3d, device, phys_device, render_pass,
+                       command_pool, graphics_queue,
+                       width, height, &scene.mesh_manager)) {
+        fprintf(stderr, "Failed to initialize 3D renderer\n");
+        return false;
+    }
+    printf("3D renderer initialized\n");
+
     // Create ECS world
     scene.world = world_create(scene.arena, TEST_MAX_ENTITIES);
     if (!scene.world) {
@@ -173,25 +196,34 @@ static bool init_scene(void) {
     // =========================================================================
     // Create Cube Entities
     // =========================================================================
+    // Create cube mesh on GPU
+    scene.cube_mesh = mesh_create_cube(&scene.mesh_manager);
+    if (scene.cube_mesh != MESH_HANDLE_INVALID) {
+        scene.meshes_initialized = true;
+        printf("Cube mesh created (handle: %u)\n", scene.cube_mesh);
+    } else {
+        fprintf(stderr, "Warning: Failed to create cube mesh\n");
+    }
+
     scene.cube_count = 5;
-    
+
     for (int i = 0; i < scene.cube_count; i++) {
         scene.cube_entities[i] = world_spawn(scene.world);
-        
+
         Transform3D* t = world_add_transform3d(scene.world, scene.cube_entities[i]);
         transform3d_init(t);
-        
+
         // Arrange cubes in a row
         t->position = vec3((i - 2) * 3.0f, 0.5f, 0);
         t->scale = vec3(1.0f, 1.0f, 1.0f);
-        
+
         MeshRenderer* mr = world_add_mesh_renderer(scene.world, scene.cube_entities[i]);
         mesh_renderer_init(mr);
-        mr->mesh_id = 1;  // Will be set to actual cube mesh handle
+        mr->mesh_id = scene.cube_mesh;  // Use actual cube mesh handle
         mr->material_id = 0;
         mr->cast_shadows = true;
     }
-    
+
     printf("Created %d cube entities\n", scene.cube_count);
 
     // =========================================================================
@@ -266,26 +298,46 @@ static void render(void) {
         return;  // Swapchain out of date, skip frame
     }
 
-    // Draw cubes as colored quads (placeholder until 3D pipeline is complete)
-    // Each cube is represented as a quad on screen for now
-    for (int i = 0; i < scene.cube_count; i++) {
-        Transform3D* t = world_get_transform3d(scene.world, scene.cube_entities[i]);
-        if (t) {
-            // Map 3D position to 2D screen space (simple orthographic projection)
-            float screen_x = 640 + t->position.x * 50;  // Center + offset
-            float screen_y = 360 - t->position.y * 50;  // Center - offset (Y flipped)
-            float size = 40.0f;
+    // Get camera matrices
+    Mat4 view, projection;
+    Vec3 cam_pos;
+    camera_system_get_matrices(scene.world, &view, &projection, &cam_pos);
 
-            // Different colors for each cube
-            float hue = (float)i / scene.cube_count;
-            float r = 0.5f + 0.5f * sinf(hue * 6.28f);
-            float g = 0.5f + 0.5f * sinf(hue * 6.28f + 2.09f);
-            float b = 0.5f + 0.5f * sinf(hue * 6.28f + 4.18f);
+    // Submit 3D draw calls for each cube entity
+    if (scene.meshes_initialized) {
+        // Begin 3D frame with camera/lighting
+        render3d_begin_frame(&scene.render3d, view, projection, cam_pos,
+                            scene.render3d.light_direction, scene.render3d.light_color,
+                            scene.render3d.light_intensity, scene.render3d.ambient_intensity);
 
-            renderer_draw_quad(scene.renderer,
-                screen_x - size/2, screen_y - size/2,
-                size, size,
-                r, g, b, 1.0f);
+        for (int i = 0; i < scene.cube_count; i++) {
+            Transform3D* t = world_get_transform3d(scene.world, scene.cube_entities[i]);
+            MeshRenderer* mr = world_get_mesh_renderer(scene.world, scene.cube_entities[i]);
+
+            if (t && mr && mr->mesh_id != MESH_HANDLE_INVALID) {
+                // Update local matrix and use it
+                transform3d_update_local(t);
+                render3d_draw_mesh(&scene.render3d, mr->mesh_id, t->local_matrix, mr->material_id);
+            }
+        }
+
+        // Execute 3D draw calls
+        VkCommandBuffer cmd = (VkCommandBuffer)renderer_get_command_buffer(scene.renderer);
+        render3d_end_frame(&scene.render3d, cmd, 0);
+    } else {
+        // Fallback: draw 2D quads if meshes not available
+        for (int i = 0; i < scene.cube_count; i++) {
+            Transform3D* t = world_get_transform3d(scene.world, scene.cube_entities[i]);
+            if (t) {
+                float screen_x = 640 + t->position.x * 50;
+                float screen_y = 360 - t->position.y * 50;
+                float size = 40.0f;
+                float hue = (float)i / scene.cube_count;
+                float r = 0.5f + 0.5f * sinf(hue * 6.28f);
+                float g = 0.5f + 0.5f * sinf(hue * 6.28f + 2.09f);
+                float b = 0.5f + 0.5f * sinf(hue * 6.28f + 4.18f);
+                renderer_draw_quad(scene.renderer, screen_x - size/2, screen_y - size/2, size, size, r, g, b, 1.0f);
+            }
         }
     }
 
@@ -298,14 +350,8 @@ static void render(void) {
 
     if (print_timer > 1.0f) {
         print_timer = 0;
-
-        // Get camera info
-        Mat4 view, projection;
-        Vec3 cam_pos;
-        if (camera_system_get_matrices(scene.world, &view, &projection, &cam_pos)) {
-            printf("Frame | Camera: (%.1f, %.1f, %.1f) | Cubes: %d | Time: %.1fs\n",
-                   cam_pos.x, cam_pos.y, cam_pos.z, scene.cube_count, scene.time);
-        }
+        printf("Frame | Cubes: %d | 3D: %s | Time: %.1fs\n",
+               scene.cube_count, scene.meshes_initialized ? "ON" : "OFF", scene.time);
     }
 }
 
@@ -348,7 +394,13 @@ static void run(void) {
 static void cleanup(void) {
     printf("\nCleaning up...\n");
 
-    // Destroy renderer first (needs valid window)
+    // Cleanup 3D renderer
+    render3d_cleanup(&scene.render3d);
+
+    // Cleanup mesh manager
+    mesh_manager_cleanup(&scene.mesh_manager);
+
+    // Destroy renderer (needs valid window)
     if (scene.renderer) {
         renderer_destroy(scene.renderer);
         scene.renderer = NULL;

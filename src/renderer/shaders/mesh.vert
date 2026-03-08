@@ -10,12 +10,25 @@ layout(location = 1) in vec3 inNormal;
 layout(location = 2) in vec2 inUV;
 layout(location = 3) in vec4 inTangent;
 
-// Per-object uniform buffer (binding 0)
-layout(set = 0, binding = 0) uniform UniformBufferObject {
+// Combined uniform buffer (all data in single binding)
+layout(set = 0, binding = 0) uniform CombinedUBO {
+    // Mesh transforms
     mat4 model;
     mat4 view;
     mat4 projection;
-    mat4 normalMatrix;  // transpose(inverse(model)) for correct normal transform
+    mat4 normalMatrix;
+
+    // Material (unused in vertex shader but needed for layout match)
+    vec4 baseColor;
+    float metallic;
+    float roughness;
+    float ambientOcclusion;
+    float _pad1;
+
+    // Lighting (unused in vertex shader but needed for layout match)
+    vec4 lightDirection;
+    vec4 lightColor;
+    vec4 cameraPosition;
 } ubo;
 
 // Outputs to fragment shader

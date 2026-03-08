@@ -56,6 +56,13 @@ uint64_t renderer_get_frame_count(const Renderer* renderer);
 void* renderer_get_command_buffer(Renderer* renderer);
 void renderer_get_extent(Renderer* renderer, uint32_t* width, uint32_t* height);
 
+// Get Vulkan device handles (for mesh manager, 3D renderer etc.)
+void* renderer_get_device(Renderer* renderer);
+void* renderer_get_physical_device(Renderer* renderer);
+void* renderer_get_render_pass(Renderer* renderer);
+void* renderer_get_command_pool(Renderer* renderer);
+void* renderer_get_graphics_queue(Renderer* renderer);
+
 // Draw a colored quad (call between begin_frame and end_frame)
 void renderer_draw_quad(Renderer* renderer,
                         float x, float y, float width, float height,

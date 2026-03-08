@@ -57,15 +57,19 @@ typedef struct Render3D {
     VkDevice device;
     VkPhysicalDevice physical_device;
     VkRenderPass render_pass;
-    
+    VkCommandPool command_pool;
+    VkQueue graphics_queue;
+
     // 3D Pipeline
     VkPipeline pipeline;
     VkPipelineLayout pipeline_layout;
-    
+
     // Descriptor sets
     VkDescriptorSetLayout descriptor_set_layout;
+    VkDescriptorSetLayout texture_set_layout;
     VkDescriptorPool descriptor_pool;
     VkDescriptorSet descriptor_sets[3]; // Per-frame
+    VkDescriptorSet default_texture_set;
     
     // Uniform buffers (per-frame)
     VkBuffer ubo_buffers[3];
@@ -83,11 +87,8 @@ typedef struct Render3D {
     VkDeviceMemory default_texture_memory;
     VkImageView default_texture_view;
     VkSampler default_sampler;
-    
-    // Texture descriptor set
-    VkDescriptorSetLayout texture_set_layout;
-    VkDescriptorSet default_texture_set;
-    
+    VkImageLayout default_texture_layout;
+
     // Mesh manager reference
     MeshManager* mesh_manager;
     
@@ -117,6 +118,8 @@ bool render3d_init(Render3D* r3d,
                    VkDevice device,
                    VkPhysicalDevice physical_device,
                    VkRenderPass render_pass,
+                   VkCommandPool command_pool,
+                   VkQueue graphics_queue,
                    uint32_t width, uint32_t height,
                    MeshManager* mesh_manager);
 
