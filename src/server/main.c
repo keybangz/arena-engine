@@ -5,6 +5,9 @@
 #include "arena/network/server.h"
 #include "arena/game/ability.h"
 #include "arena/game/combat.h"
+#include "arena/game/ai.h"
+#include "arena/game/spawner.h"
+#include "arena/map/map.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -38,6 +41,8 @@ typedef struct ServerState {
     Arena* tick_arena;
     World* world;
     GameServer* game_server;
+    Map* map;
+    Spawner spawner;
 
     // Timing
     uint64_t tick_count;
@@ -105,16 +110,23 @@ static void do_server_tick(double dt) {
         }
     }
 
+    // AI system
+    ai_system_update(g_server.world, g_server.map, (float)dt);
+
+    // Spawner system
+    spawner_update(&g_server.spawner, g_server.world, g_server.map, (float)dt);
+
     // Combat systems
     combat_projectile_system(g_server.world, (float)dt);
     combat_death_system(g_server.world, (float)dt);
 
     // Print stats every 5 seconds
     if (g_server.tick_count % (TICK_RATE * 5) == 0) {
-        printf("Server tick %lu | Entities: %u | Clients: %u\n",
+        printf("Server tick %lu | Entities: %u | Clients: %u | Wave: %u\n",
                (unsigned long)g_server.tick_count,
                world_entity_count(g_server.world),
-               g_server.game_server->client_count);
+               g_server.game_server->client_count,
+               g_server.spawner.wave_count);
     }
 }
 
@@ -163,7 +175,7 @@ static void run_server_loop(void) {
 int main(int argc, char** argv) {
     (void)argc; (void)argv;
 
-    printf("Arena Engine Server v0.5.0\n");
+    printf("Arena Engine Server v0.6.0\n");
     printf("==========================\n");
 
     // Setup signal handler
@@ -205,6 +217,20 @@ int main(int argc, char** argv) {
     }
     printf("ECS world created (max entities: %d)\n", SERVER_MAX_ENTITIES);
 
+    // Create map
+    g_server.map = map_create_default();
+    if (!g_server.map) {
+        fprintf(stderr, "Failed to create map\n");
+        return 1;
+    }
+    map_print(g_server.map);
+
+    // Initialize spawner
+    spawner_init(&g_server.spawner);
+
+    // Spawn initial objects (towers)
+    spawn_initial_objects(g_server.world, g_server.map);
+
     // Create game server
     g_server.game_server = server_create(SERVER_PORT, g_server.world);
     if (!g_server.game_server) {
@@ -220,6 +246,7 @@ int main(int argc, char** argv) {
 
     // Cleanup
     server_destroy(g_server.game_server);
+    map_destroy(g_server.map);
     arena_destroy(g_server.tick_arena);
     arena_destroy(g_server.persistent_arena);
     net_shutdown();

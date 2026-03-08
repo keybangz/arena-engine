@@ -20,7 +20,7 @@
 
 #define WINDOW_WIDTH  1280
 #define WINDOW_HEIGHT 720
-#define WINDOW_TITLE  "Arena Engine v0.5.0"
+#define WINDOW_TITLE  "Arena Engine v0.6.0"
 
 #define GAME_MAX_ENTITIES 10000
 
@@ -440,7 +440,7 @@ static void shutdown_game(void) {
 int main(int argc, char** argv) {
     (void)argc; (void)argv;
 
-    printf("Arena Engine Client v0.5.0\n");
+    printf("Arena Engine Client v0.6.0\n");
     printf("==========================\n");
 
     if (!init_window()) {
