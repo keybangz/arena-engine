@@ -7,10 +7,13 @@ add_library(arena-renderer STATIC
     mesh.c
     render_3d.h
     render_3d.c
+    gltf_loader.h
+    gltf_loader.c
 )
 
 target_include_directories(arena-renderer PRIVATE
     ${CMAKE_SOURCE_DIR}/libs
+    ${CMAKE_SOURCE_DIR}/libs/cgltf
 )
 
 target_link_libraries(arena-renderer

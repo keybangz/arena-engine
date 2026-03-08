@@ -17,6 +17,7 @@
 #include "arena/game/camera_system.h"
 #include "renderer/mesh.h"
 #include "renderer/render_3d.h"
+#include "renderer/gltf_loader.h"
 
 #include <GLFW/glfw3.h>
 #include <stdio.h>
@@ -51,7 +52,11 @@ typedef struct TestScene {
     MeshManager mesh_manager;
     MeshHandle cube_mesh;
     MeshHandle plane_mesh;
-    
+
+    // glTF loaded model
+    GltfLoadResult gltf_box;
+    Entity gltf_entity;
+
     // Time
     float time;
     bool running;
@@ -175,6 +180,33 @@ static bool init_scene(void) {
     }
     
     printf("Created %d cube entities\n", scene.cube_count);
+
+    // =========================================================================
+    // Test glTF Loading
+    // =========================================================================
+    printf("\n--- Testing glTF Loader ---\n");
+
+    // Try to load the Box.glb model (path is relative to build directory)
+    if (gltf_load_file(&scene.mesh_manager, "../assets/models/Box.glb", &scene.gltf_box)) {
+        printf("glTF Load Success!\n");
+        printf("  Meshes: %u\n", scene.gltf_box.mesh_count);
+        printf("  Bounds: min=(%.2f, %.2f, %.2f) max=(%.2f, %.2f, %.2f)\n",
+               scene.gltf_box.bounds_min.x, scene.gltf_box.bounds_min.y, scene.gltf_box.bounds_min.z,
+               scene.gltf_box.bounds_max.x, scene.gltf_box.bounds_max.y, scene.gltf_box.bounds_max.z);
+
+        for (uint32_t i = 0; i < scene.gltf_box.mesh_count; i++) {
+            printf("  [%u] %s: %u verts, %u indices%s\n",
+                   i, scene.gltf_box.meshes[i].name,
+                   scene.gltf_box.meshes[i].vertex_count,
+                   scene.gltf_box.meshes[i].index_count,
+                   scene.gltf_box.meshes[i].is_skinned ? " (skinned)" : "");
+        }
+    } else {
+        printf("glTF Load Failed: %s\n", scene.gltf_box.error_message);
+        printf("  (This is expected - we need a MeshManager with valid Vulkan device)\n");
+    }
+
+    printf("--- glTF Test Complete ---\n\n");
 
     scene.running = true;
     return true;
