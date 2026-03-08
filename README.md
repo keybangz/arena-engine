@@ -7,12 +7,12 @@ A performant MOBA game engine for Linux, built with C and Vulkan 1.2.
 | Component | Status | Version |
 |-----------|--------|---------|
 | **Core Engine** | ✅ Implemented | v0.7.0 |
-| **3D Rendering** | 📋 Designed | - |
+| **3D Rendering** | ✅ Implemented | v0.8.0 |
 | **UI Systems** | 📋 Designed | - |
 | **Tools** | 📋 Designed | - |
 
-**Current:** v0.7.0 (Content) — ~6,365 lines of code implemented  
-**Next:** v0.8.0 (3D Foundation)
+**Current:** v0.8.0 (3D Foundation) — ~8,500+ lines of code implemented
+**Next:** v0.9.0 (3D Materials & Animation)
 
 ## Project Aim
 
@@ -38,9 +38,23 @@ Build a complete, high-performance MOBA game engine inspired by League of Legend
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-## Implemented Features (v0.7.0)
+## Implemented Features
 
-- **Rendering:** Vulkan 1.2 quad pipeline, SPIR-V shaders
+### v0.8.0 - 3D Foundation (Current)
+
+- **3D Pipeline:** Vulkan mesh rendering with depth buffer, backface culling
+- **Materials:** PBR material system with base color, metallic, roughness
+- **Textures:** PNG/JPG loading via stb_image, GPU upload with staging buffers
+- **Normal Mapping:** Tangent-space normal map support in shaders
+- **Mesh System:** Handle-based management, cube primitives, GPU memory allocation
+- **glTF Loading:** Model import via cgltf library
+- **Camera System:** ECS-integrated camera with perspective/orthographic projection
+- **Push Constants:** Per-object model matrices for efficient batched rendering
+- **Shaders:** GLSL with Blinn-Phong lighting, PBR material properties
+
+### v0.7.0 - Core Engine
+
+- **Rendering:** Vulkan 1.2 2D quad pipeline, SPIR-V shaders, sprite batching
 - **ECS:** Sparse-set storage, component queries, 10K+ entities
 - **Networking:** UDP client-server, state synchronization, 10 players
 - **Combat:** Abilities, projectiles, collision, damage system
@@ -51,16 +65,14 @@ Build a complete, high-performance MOBA game engine inspired by League of Legend
 
 ## Development Plan
 
-| Phase | Milestone | Focus | Est. Duration |
-|-------|-----------|-------|---------------|
-| 1 | v0.8.0 | 3D Foundation (mesh, camera, depth) | 2-3 weeks |
-| 2 | v0.9.0 | Materials & Lighting | 2-3 weeks |
-| 3 | v0.10.0 | Animation & Champions | 2-3 weeks |
-| 4 | v0.11.0 | UI Implementation | 3-4 weeks |
-| 5 | v0.12.0 | Tools (Map Editor, Replay) | 4-5 weeks |
-| 6 | v1.0.0 | Polish & Release | 3-4 weeks |
-
-**Total Estimated:** 16-22 weeks
+| Phase | Milestone | Focus | Status |
+|-------|-----------|-------|--------|
+| 1 | v0.8.0 | 3D Foundation (mesh, camera, depth) | ✅ Complete |
+| 2 | v0.9.0 | Skeletal Animation & glTF | 🔄 In Progress |
+| 3 | v0.10.0 | Advanced Materials & Shadows | 📋 Planned |
+| 4 | v0.11.0 | UI Implementation | 📋 Planned |
+| 5 | v0.12.0 | Tools (Map Editor, Replay) | 📋 Planned |
+| 6 | v1.0.0 | Polish & Release | 📋 Planned |
 
 ## Building
 

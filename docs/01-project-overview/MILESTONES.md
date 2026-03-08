@@ -1,6 +1,6 @@
 # Arena Engine MOBA - Feature Milestones
 
-> **Current Version:** v0.7.0
+> **Current Version:** v0.8.0 (3D Foundation)
 > **Last Updated:** 2026-03-08
 
 ## Executive Summary
@@ -17,37 +17,42 @@ This document outlines the development roadmap from the initial state (v0.1.0) t
 | v0.5.0 | Multiplayer | ✅ Complete | ~1,000 | `ccf0547` |
 | v0.6.0 | Arena Alpha | ✅ Complete | ~1,025 | `1aba6f4` |
 | v0.7.0 | Content | ✅ Complete | ~755 | `fc37cf3` |
-| v0.8.0 | **3D Foundation** | ⬜ Planned | ~1,850 | - |
-| v0.9.0 | **3D Materials** | ⬜ Planned | ~1,450 | - |
-| v0.10.0 | **3D Animation** | ⬜ Planned | ~1,400 | - |
+| v0.8.0 | **3D Foundation** | ✅ Complete | ~2,100 | `latest` |
+| v0.9.0 | **3D Animation** | 🔄 In Progress | ~1,400 | - |
+| v0.10.0 | **Advanced Rendering** | ⬜ Planned | ~1,450 | - |
 | v1.0.0 | Release | ⬜ Planned | ~3,600 | - |
-| **Implemented** | | | **~6,365** | |
-| **3D Transition** | | | **~4,700** | |
+| **Implemented** | | | **~8,465** | |
+| **Remaining** | | | **~6,450** | |
 
-### Current State Assessment (v0.7.0)
+### Current State Assessment (v0.8.0)
 
-| System | Status | 3D Readiness |
-|--------|--------|--------------|
-| Arena Allocator | ✅ Complete | ✅ Ready |
-| HashMap | ✅ Complete | ✅ Ready |
-| Array | ✅ Complete | ✅ Ready |
-| Vec3/Mat4/Quat | ✅ Complete | ✅ Ready |
-| ECS | ✅ Complete | ⚠️ Needs 3D components |
-| Vulkan Renderer | ✅ Complete | ⚠️ Needs depth buffer, mesh pipeline |
-| Input | ✅ Complete | ✅ Ready |
-| Combat/AI | ✅ Complete | ✅ Logic layer unchanged |
-| Network | ✅ Complete | ✅ Unchanged |
-| Map | ✅ Complete | ⚠️ Needs 3D terrain |
-| Champions | ✅ Complete | ⚠️ Needs 3D models |
-| Items | ✅ Complete | ✅ Ready |
+| System | Status | Notes |
+|--------|--------|-------|
+| Arena Allocator | ✅ Complete | Ready |
+| HashMap | ✅ Complete | Ready |
+| Array | ✅ Complete | Ready |
+| Vec3/Mat4/Quat | ✅ Complete | Vulkan-compatible projections |
+| ECS | ✅ Complete | 3D components added |
+| Vulkan Renderer | ✅ Complete | Depth buffer, 3D pipeline |
+| **3D Mesh Pipeline** | ✅ Complete | Push constants, batched draws |
+| **Material System** | ✅ Complete | PBR materials, textures |
+| **Texture Manager** | ✅ Complete | PNG/JPG loading, GPU upload |
+| **Camera System** | ✅ Complete | ECS-integrated, perspective/ortho |
+| **glTF Loading** | ✅ Complete | Via cgltf library |
+| Input | ✅ Complete | Ready |
+| Combat/AI | ✅ Complete | Logic layer unchanged |
+| Network | ✅ Complete | Unchanged |
+| Map | ✅ Complete | Needs 3D terrain |
+| Champions | ✅ Complete | Needs 3D models |
+| Items | ✅ Complete | Ready |
 
 ### 3D Transition Overview
 
-The engine is transitioning from 2D quad-based rendering to full 3D mesh rendering:
+The engine has transitioned from 2D quad-based rendering to full 3D mesh rendering:
 
-| Phase | Version | Focus | Duration |
-|-------|---------|-------|----------|
-| Foundation | v0.8.0 | Mesh pipeline, glTF, camera | 2-3 weeks |
+| Phase | Version | Focus | Status |
+|-------|---------|-------|--------|
+| Foundation | v0.8.0 | Mesh pipeline, glTF, camera | ✅ Complete |
 | Materials | v0.9.0 | PBR, shadows, lighting | 2-3 weeks |
 | Animation | v0.10.0 | Skeletal, instancing, culling | 2-3 weeks |
 | Release | v1.0.0 | Polish, performance, assets | 4-6 weeks |
@@ -1014,23 +1019,27 @@ uint32_t economy_exp_for_level(uint32_t level);
 
 ---
 
-## v0.8.0 - "3D Foundation"
+## v0.8.0 - "3D Foundation" ✅ COMPLETE
 
 **Goal:** Transition to 3D mesh rendering while preserving gameplay
-**Duration:** 2-3 weeks
-**Complexity:** Medium-High
+**Status:** ✅ Complete (~2,100 LOC)
+**Completed:** 2026-03-08
 **Reference:** [3D_IMPLEMENTATION_PROPOSAL.md](../03-design/3d-rendering/3D_IMPLEMENTATION_PROPOSAL.md)
 
-### Prerequisites
-- v0.7.0 complete
-- cgltf library integrated
-- stb_image library integrated
+### Implementation Notes
+- Full Vulkan 3D mesh pipeline with depth buffer
+- Push constants for per-object model matrices (fixed batched rendering)
+- PBR material system with texture support
+- glTF model loading via cgltf
+- ECS camera system with perspective/orthographic projection
+- Normal mapping support in shaders
+- Vulkan-compatible projection matrices (Y-flip, Z [0,1])
 
-### Focus Areas
-- **Rendering:** Forward rendering, depth buffer, mesh pipeline
-- **Assets:** glTF 2.0 loading via cgltf
-- **Components:** Transform3D, MeshRenderer, Camera, Light
-- **Shading:** Static mesh + basic diffuse lighting
+### Completed Features
+- **Rendering:** Forward rendering, depth buffer, backface culling
+- **Assets:** glTF 2.0 loading, PNG/JPG textures via stb_image
+- **Components:** Transform3D, MeshRenderer, Camera, Light, Material3D
+- **Shading:** Blinn-Phong lighting with PBR material properties
 
 ### Deliverables
 

@@ -1,7 +1,8 @@
 # Arena Engine Documentation Index
 
-> **Last Updated:** 2026-03-08  
-> **Total Documents:** 21  
+> **Version:** 0.8.0 (3D Foundation)
+> **Last Updated:** 2026-03-08
+> **Total Documents:** 21
 > **Total Lines:** ~25,000+
 
 ## Quick Navigation
