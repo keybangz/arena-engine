@@ -10,13 +10,16 @@ layout(location = 1) in vec3 inNormal;
 layout(location = 2) in vec2 inUV;
 layout(location = 3) in vec4 inTangent;
 
-// Combined uniform buffer (all data in single binding)
-layout(set = 0, binding = 0) uniform CombinedUBO {
-    // Mesh transforms
+// Push constants for per-object model matrix
+layout(push_constant) uniform PushConstants {
     mat4 model;
+} push;
+
+// Combined uniform buffer (shared across all draws)
+layout(set = 0, binding = 0) uniform CombinedUBO {
+    // Camera transforms (shared)
     mat4 view;
     mat4 projection;
-    mat4 normalMatrix;
 
     // Material (unused in vertex shader but needed for layout match)
     vec4 baseColor;
@@ -39,23 +42,23 @@ layout(location = 3) out vec3 fragTangent;
 layout(location = 4) out vec3 fragBitangent;
 
 void main() {
-    // Transform position to world space
-    vec4 worldPos = ubo.model * vec4(inPosition, 1.0);
+    // Transform position to world space using push constant model matrix
+    vec4 worldPos = push.model * vec4(inPosition, 1.0);
     fragPosition = worldPos.xyz;
-    
+
     // Transform to clip space
     gl_Position = ubo.projection * ubo.view * worldPos;
-    
-    // Transform normal to world space (use normal matrix)
-    fragNormal = normalize(mat3(ubo.normalMatrix) * inNormal);
-    
+
+    // Transform normal to world space
+    fragNormal = normalize(mat3(push.model) * inNormal);
+
     // Pass through UV
     fragUV = inUV;
-    
+
     // Transform tangent to world space
-    fragTangent = normalize(mat3(ubo.model) * inTangent.xyz);
-    
-    // Calculate bitangent (tangent.w contains handedness)
+    fragTangent = normalize(mat3(push.model) * inTangent.xyz);
+
+    // Calculate bitangent
     fragBitangent = cross(fragNormal, fragTangent) * inTangent.w;
 }
 

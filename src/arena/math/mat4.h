@@ -118,26 +118,28 @@ static inline Mat4 mat4_rotate_z(float angle) {
 // Projection Matrices
 // ----------------------------------------------------------------------------
 
+// Vulkan-compatible orthographic projection (Z: 0 to 1, Y flipped)
 static inline Mat4 mat4_ortho(float left, float right, float bottom, float top,
                                float near, float far) {
     Mat4 result = mat4_identity();
     result.m[0][0] = 2.0f / (right - left);
-    result.m[1][1] = 2.0f / (top - bottom);
-    result.m[2][2] = -2.0f / (far - near);
+    result.m[1][1] = -2.0f / (top - bottom);  // Flip Y for Vulkan
+    result.m[2][2] = -1.0f / (far - near);    // Z: 0 to 1 for Vulkan
     result.m[3][0] = -(right + left) / (right - left);
     result.m[3][1] = -(top + bottom) / (top - bottom);
-    result.m[3][2] = -(far + near) / (far - near);
+    result.m[3][2] = -near / (far - near);    // Z: 0 to 1 for Vulkan
     return result;
 }
 
+// Vulkan-compatible perspective projection (Z: 0 to 1, Y flipped)
 static inline Mat4 mat4_perspective(float fov_y, float aspect, float near, float far) {
     float tan_half_fov = tanf(fov_y * 0.5f);
     Mat4 result = mat4_zero();
     result.m[0][0] = 1.0f / (aspect * tan_half_fov);
-    result.m[1][1] = 1.0f / tan_half_fov;
-    result.m[2][2] = -(far + near) / (far - near);
+    result.m[1][1] = -1.0f / tan_half_fov;    // Flip Y for Vulkan
+    result.m[2][2] = far / (near - far);      // Z: 0 to 1 for Vulkan
     result.m[2][3] = -1.0f;
-    result.m[3][2] = -(2.0f * far * near) / (far - near);
+    result.m[3][2] = (far * near) / (near - far);  // Z: 0 to 1 for Vulkan
     return result;
 }
 

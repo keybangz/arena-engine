@@ -7,24 +7,28 @@
 // Combined UBO structure for all uniforms (matches shader bindings)
 // ============================================================================
 
-typedef struct CombinedUBO {
-    // Binding 0: MeshUBO
+// Push constants for per-object data
+typedef struct PushConstants {
     Mat4 model;
+} PushConstants;
+
+// Shared UBO (same for all draws in a frame)
+typedef struct CombinedUBO {
+    // Camera
     Mat4 view;
     Mat4 projection;
-    Mat4 normalMatrix;
 
-    // Binding 1: MaterialUBO
+    // Material
     Vec4 baseColor;
     float metallic;
     float roughness;
     float ambientOcclusion;
     float padding1;
 
-    // Binding 2: LightUBO
-    Vec4 lightDirection;  // xyz = direction, w = intensity
-    Vec4 lightColor;      // rgb = color, a = ambient intensity
-    Vec4 cameraPosition;  // xyz = camera world position
+    // Lighting
+    Vec4 lightDirection;
+    Vec4 lightColor;
+    Vec4 cameraPosition;
 } CombinedUBO;
 
 // ============================================================================
@@ -602,8 +606,8 @@ static bool create_3d_pipeline(Render3D* r3d) {
         .depthClampEnable = VK_FALSE,
         .rasterizerDiscardEnable = VK_FALSE,
         .polygonMode = VK_POLYGON_MODE_FILL,
-        .cullMode = VK_CULL_MODE_BACK_BIT,
-        .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
+        .cullMode = VK_CULL_MODE_NONE,  // Disable culling for debugging
+        .frontFace = VK_FRONT_FACE_CLOCKWISE,
         .lineWidth = 1.0f
     };
 
@@ -644,12 +648,23 @@ static bool create_3d_pipeline(Render3D* r3d) {
         .pDynamicStates = dynamic_states
     };
 
-    // Pipeline layout
-    VkDescriptorSetLayout set_layouts[] = { r3d->descriptor_set_layout, r3d->texture_set_layout };
+    // Push constant range for model matrix
+    VkPushConstantRange push_range = {
+        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+        .offset = 0,
+        .size = sizeof(PushConstants)
+    };
+
+    // Pipeline layout - use texture manager's layout for set 1 if available
+    VkDescriptorSetLayout tex_layout = r3d->texture_manager ?
+        texture_manager_get_set_layout(r3d->texture_manager) : r3d->texture_set_layout;
+    VkDescriptorSetLayout set_layouts[] = { r3d->descriptor_set_layout, tex_layout };
     VkPipelineLayoutCreateInfo layout_info = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         .setLayoutCount = 2,
-        .pSetLayouts = set_layouts
+        .pSetLayouts = set_layouts,
+        .pushConstantRangeCount = 1,
+        .pPushConstantRanges = &push_range
     };
 
     if (vkCreatePipelineLayout(r3d->device, &layout_info, NULL, &r3d->pipeline_layout) != VK_SUCCESS) {
@@ -832,6 +847,7 @@ void render3d_begin_frame(Render3D* r3d,
 
 void render3d_draw_mesh(Render3D* r3d, MeshHandle mesh, Mat4 transform, uint32_t material_id) {
     if (r3d->draw_count >= MAX_DRAW_CALLS) return;
+    if (!r3d->mesh_manager) return;
     if (!mesh_is_valid(r3d->mesh_manager, mesh)) return;
 
     DrawCommand3D* cmd = &r3d->draw_queue[r3d->draw_count++];
@@ -841,8 +857,7 @@ void render3d_draw_mesh(Render3D* r3d, MeshHandle mesh, Mat4 transform, uint32_t
 }
 
 void render3d_end_frame(Render3D* r3d, VkCommandBuffer cmd, uint32_t frame_index) {
-    if (r3d->draw_count == 0) return;
-    if (!r3d->pipeline) return;
+    if (r3d->draw_count == 0 || !r3d->pipeline || !cmd) return;
 
     // Bind 3D pipeline
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r3d->pipeline);
@@ -863,61 +878,46 @@ void render3d_end_frame(Render3D* r3d, VkCommandBuffer cmd, uint32_t frame_index
     };
     vkCmdSetScissor(cmd, 0, 1, &scissor);
 
-    // Bind default texture (set 1)
-    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r3d->pipeline_layout,
-                           1, 1, &r3d->default_texture_set, 0, NULL);
-
     // Process each draw call
+    // Update shared UBO once per frame (camera, lighting)
+    CombinedUBO ubo;
+    ubo.view = r3d->view_matrix;
+    ubo.projection = r3d->projection_matrix;
+    ubo.baseColor = vec4(0.8f, 0.8f, 0.8f, 1.0f);  // Default material
+    ubo.metallic = 0.0f;
+    ubo.roughness = 0.5f;
+    ubo.ambientOcclusion = 1.0f;
+    ubo.padding1 = 0.0f;
+    ubo.lightDirection = vec4(r3d->light_direction.x, r3d->light_direction.y,
+                              r3d->light_direction.z, r3d->light_intensity);
+    ubo.lightColor = vec4(r3d->light_color.x, r3d->light_color.y,
+                          r3d->light_color.z, r3d->ambient_intensity);
+    ubo.cameraPosition = vec4(r3d->camera_position.x, r3d->camera_position.y,
+                              r3d->camera_position.z, 0.0f);
+    memcpy(r3d->ubo_mapped[frame_index % 3], &ubo, sizeof(CombinedUBO));
+
+    // Bind shared UBO descriptor set once
+    uint32_t dynamic_offset = 0;
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r3d->pipeline_layout,
+                           0, 1, &r3d->descriptor_sets[frame_index % 3], 1, &dynamic_offset);
+
     for (uint32_t i = 0; i < r3d->draw_count; i++) {
         DrawCommand3D* draw = &r3d->draw_queue[i];
 
-        // Update UBO for this draw call
-        CombinedUBO ubo;
-        ubo.model = draw->transform;
-        ubo.view = r3d->view_matrix;
-        ubo.projection = r3d->projection_matrix;
-        ubo.normalMatrix = draw->transform;  // OK for uniform scale
+        // Push model matrix per-draw
+        PushConstants push = { .model = draw->transform };
+        vkCmdPushConstants(cmd, r3d->pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT,
+                          0, sizeof(PushConstants), &push);
 
-        // Get material properties
-        Material* mat = r3d->material_manager ? material_get(r3d->material_manager, draw->material_id) : NULL;
-        if (mat && mat->is_valid) {
-            ubo.baseColor = mat->base_color;
-            ubo.metallic = mat->metallic;
-            ubo.roughness = mat->roughness;
-            ubo.ambientOcclusion = mat->ambient_occlusion;
-        } else {
-            ubo.baseColor = vec4(0.8f, 0.8f, 0.8f, 1.0f);
-            ubo.metallic = 0.0f;
-            ubo.roughness = 0.5f;
-            ubo.ambientOcclusion = 1.0f;
-        }
-        ubo.padding1 = 0.0f;
-
-        // Lighting
-        ubo.lightDirection = vec4(r3d->light_direction.x, r3d->light_direction.y,
-                                  r3d->light_direction.z, r3d->light_intensity);
-        ubo.lightColor = vec4(r3d->light_color.x, r3d->light_color.y,
-                              r3d->light_color.z, r3d->ambient_intensity);
-        ubo.cameraPosition = vec4(r3d->camera_position.x, r3d->camera_position.y,
-                                  r3d->camera_position.z, 0.0f);
-
-        // Copy UBO data (use frame_index for triple buffering)
-        memcpy(r3d->ubo_mapped[frame_index % 3], &ubo, sizeof(CombinedUBO));
-
-        // Bind UBO descriptor set (set 0)
-        uint32_t dynamic_offset = 0;
-        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r3d->pipeline_layout,
-                               0, 1, &r3d->descriptor_sets[frame_index % 3], 1, &dynamic_offset);
-
-        // Bind texture (set 1) from material
-        if (mat && mat->is_valid && r3d->texture_manager) {
-            Texture* tex = texture_get(r3d->texture_manager, mat->albedo_texture);
+        // Bind texture (set 1) - use material's texture or default white
+        if (r3d->texture_manager) {
+            Material* mat = r3d->material_manager ? material_get(r3d->material_manager, draw->material_id) : NULL;
+            TextureHandle tex_handle = (mat && mat->is_valid) ?
+                mat->albedo_texture : texture_get_white(r3d->texture_manager);
+            Texture* tex = texture_get(r3d->texture_manager, tex_handle);
             if (tex && tex->is_valid) {
                 vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r3d->pipeline_layout,
                                        1, 1, &tex->descriptor_set, 0, NULL);
-            } else {
-                vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r3d->pipeline_layout,
-                                       1, 1, &r3d->default_texture_set, 0, NULL);
             }
         }
 

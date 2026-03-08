@@ -11,13 +11,11 @@ layout(location = 2) in vec2 fragUV;
 layout(location = 3) in vec3 fragTangent;
 layout(location = 4) in vec3 fragBitangent;
 
-// Combined uniform buffer (all data in single binding, matches vertex shader)
+// Combined uniform buffer (matches vertex shader layout)
 layout(set = 0, binding = 0) uniform CombinedUBO {
-    // Mesh transforms (unused in fragment shader but needed for layout match)
-    mat4 model;
+    // Camera transforms
     mat4 view;
     mat4 projection;
-    mat4 normalMatrix;
 
     // Material
     vec4 baseColor;

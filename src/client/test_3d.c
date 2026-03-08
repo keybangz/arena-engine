@@ -339,14 +339,16 @@ static void render(void) {
         return;  // Swapchain out of date, skip frame
     }
 
-    // Get camera matrices
-    Mat4 view, projection;
-    Vec3 cam_pos;
-    camera_system_get_matrices(scene.world, &view, &projection, &cam_pos);
+    // Camera setup - looking at cubes from above and back
+    Vec3 cam_pos = vec3(0, 8, 20);
+    Vec3 target = vec3(0, 0, 0);
+    Vec3 up = vec3(0, 1, 0);
+    Mat4 view = mat4_look_at(cam_pos, target, up);
+    float aspect = (float)WINDOW_WIDTH / (float)WINDOW_HEIGHT;
+    Mat4 projection = mat4_perspective(60.0f * 3.14159f / 180.0f, aspect, 0.1f, 100.0f);
 
-    // Submit 3D draw calls for each cube entity
+    // Submit 3D draw calls
     if (scene.meshes_initialized) {
-        // Begin 3D frame with camera/lighting
         render3d_begin_frame(&scene.render3d, view, projection, cam_pos,
                             scene.render3d.light_direction, scene.render3d.light_color,
                             scene.render3d.light_intensity, scene.render3d.ambient_intensity);
@@ -356,30 +358,13 @@ static void render(void) {
             MeshRenderer* mr = world_get_mesh_renderer(scene.world, scene.cube_entities[i]);
 
             if (t && mr && mr->mesh_id != MESH_HANDLE_INVALID) {
-                // Update local matrix and use it
                 transform3d_update_local(t);
                 render3d_draw_mesh(&scene.render3d, mr->mesh_id, t->local_matrix, mr->material_id);
             }
         }
 
-        // Execute 3D draw calls
         VkCommandBuffer cmd = (VkCommandBuffer)renderer_get_command_buffer(scene.renderer);
         render3d_end_frame(&scene.render3d, cmd, 0);
-    } else {
-        // Fallback: draw 2D quads if meshes not available
-        for (int i = 0; i < scene.cube_count; i++) {
-            Transform3D* t = world_get_transform3d(scene.world, scene.cube_entities[i]);
-            if (t) {
-                float screen_x = 640 + t->position.x * 50;
-                float screen_y = 360 - t->position.y * 50;
-                float size = 40.0f;
-                float hue = (float)i / scene.cube_count;
-                float r = 0.5f + 0.5f * sinf(hue * 6.28f);
-                float g = 0.5f + 0.5f * sinf(hue * 6.28f + 2.09f);
-                float b = 0.5f + 0.5f * sinf(hue * 6.28f + 4.18f);
-                renderer_draw_quad(scene.renderer, screen_x - size/2, screen_y - size/2, size, size, r, g, b, 1.0f);
-            }
-        }
     }
 
     // End Vulkan frame (submit and present)
