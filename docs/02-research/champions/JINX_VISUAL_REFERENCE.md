@@ -372,10 +372,63 @@ Mana Cost Indicator:
 
 ## REFERENCE IMAGES
 
-For detailed visual reference, see:
-- League of Legends official Jinx splash art
-- Arcane Netflix series (Jinx character design)
-- In-game model and animations
-- Ability effect videos
+### Official Splash Art (Classic)
+
+![Jinx Splash Art](https://ddragon.leagueoflegends.com/cdn/img/champion/splash/Jinx_0.jpg)
+
+*Classic Jinx splash art - Full character design with Pow-Pow (minigun) and Fishbones (rocket launcher)*
+
+### Champion Select / Loading Screen
+
+![Jinx Loading Screen](https://ddragon.leagueoflegends.com/cdn/img/champion/loading/Jinx_0.jpg)
+
+*Loading screen portrait - Used in champion select and game loading*
+
+### In-Game Model Reference
+
+![Jinx Centered Portrait](https://ddragon.leagueoflegends.com/cdn/img/champion/centered/Jinx_0.jpg)
+
+*Centered splash crop - Used for in-game shop and collection UI*
+
+### Ability Icons
+
+| Ability | Icon | Name |
+|---------|------|------|
+| Passive | ![Get Excited!](https://ddragon.leagueoflegends.com/cdn/14.24.1/img/passive/Jinx_Passive.png) | Get Excited! |
+| Q | ![Switcheroo!](https://ddragon.leagueoflegends.com/cdn/14.24.1/img/spell/JinxQ.png) | Switcheroo! |
+| W | ![Zap!](https://ddragon.leagueoflegends.com/cdn/14.24.1/img/spell/JinxW.png) | Zap! |
+| E | ![Flame Chompers!](https://ddragon.leagueoflegends.com/cdn/14.24.1/img/spell/JinxE.png) | Flame Chompers! |
+| R | ![Super Mega Death Rocket!](https://ddragon.leagueoflegends.com/cdn/14.24.1/img/spell/JinxR.png) | Super Mega Death Rocket! |
+
+### Champion Square Icon
+
+![Jinx Square](https://ddragon.leagueoflegends.com/cdn/14.24.1/img/champion/Jinx.png)
+
+*Square icon used in scoreboard, minimap, and HUD*
+
+### Skin Variants (Reference)
+
+| Skin | Splash Art |
+|------|------------|
+| Crime City Jinx | ![Crime City](https://ddragon.leagueoflegends.com/cdn/img/champion/splash/Jinx_1.jpg) |
+| Star Guardian Jinx | ![Star Guardian](https://ddragon.leagueoflegends.com/cdn/img/champion/splash/Jinx_4.jpg) |
+| PROJECT: Jinx | ![PROJECT](https://ddragon.leagueoflegends.com/cdn/img/champion/splash/Jinx_20.jpg) |
+| Arcane Jinx | ![Arcane](https://ddragon.leagueoflegends.com/cdn/img/champion/splash/Jinx_37.jpg) |
+
+### Video References
+
+Ability preview videos are available at:
+- **Passive:** [Get Excited! Video](https://lol.dyn.riotcdn.net/x/videos/champion-abilities/0222/ability_0222_P1.webm)
+- **Q:** [Switcheroo! Video](https://lol.dyn.riotcdn.net/x/videos/champion-abilities/0222/ability_0222_Q1.webm)
+- **W:** [Zap! Video](https://lol.dyn.riotcdn.net/x/videos/champion-abilities/0222/ability_0222_W1.webm)
+- **E:** [Flame Chompers! Video](https://lol.dyn.riotcdn.net/x/videos/champion-abilities/0222/ability_0222_E1.webm)
+- **R:** [Super Mega Death Rocket! Video](https://lol.dyn.riotcdn.net/x/videos/champion-abilities/0222/ability_0222_R1.webm)
+
+### Additional Resources
+
+- [Official Champion Page](https://www.leagueoflegends.com/en-us/champions/jinx/)
+- [OP.GG Jinx Builds](https://op.gg/lol/champions/jinx/build)
+- [U.GG Jinx Builds](https://u.gg/lol/champions/jinx/build)
+- Arcane Netflix series (Jinx character design and backstory)
 
 
