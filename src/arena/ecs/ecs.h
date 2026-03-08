@@ -68,6 +68,7 @@ static inline ComponentMask component_mask_remove(ComponentMask mask, ComponentT
 
 // Component type IDs (registered at world creation)
 typedef enum ComponentTypeId {
+    // 2D Components
     COMPONENT_TRANSFORM = 0,
     COMPONENT_VELOCITY,
     COMPONENT_SPRITE,
@@ -76,6 +77,14 @@ typedef enum ComponentTypeId {
     COMPONENT_AI,
     COMPONENT_COLLIDER,
     COMPONENT_TEAM,
+
+    // 3D Components (v0.8.0+)
+    COMPONENT_TRANSFORM3D,
+    COMPONENT_MESH_RENDERER,
+    COMPONENT_CAMERA,
+    COMPONENT_LIGHT,
+    COMPONENT_SKINNED_MESH,
+
     COMPONENT_TYPE_COUNT  // Must be last
 } ComponentTypeId;
 
@@ -166,6 +175,19 @@ void world_remove_component(World* world, Entity entity, ComponentType type);
 #define world_get_health(w, e)    ((Health*)world_get_component(w, e, COMPONENT_HEALTH))
 #define world_get_player(w, e)    ((Player*)world_get_component(w, e, COMPONENT_PLAYER))
 #define world_get_collider(w, e)  ((Collider*)world_get_component(w, e, COMPONENT_COLLIDER))
+
+// 3D component macros (components_3d.h must be included separately)
+#define world_add_transform3d(w, e)    ((Transform3D*)world_add_component(w, e, COMPONENT_TRANSFORM3D))
+#define world_add_mesh_renderer(w, e)  ((MeshRenderer*)world_add_component(w, e, COMPONENT_MESH_RENDERER))
+#define world_add_camera(w, e)         ((Camera*)world_add_component(w, e, COMPONENT_CAMERA))
+#define world_add_light(w, e)          ((Light*)world_add_component(w, e, COMPONENT_LIGHT))
+#define world_add_skinned_mesh(w, e)   ((SkinnedMesh*)world_add_component(w, e, COMPONENT_SKINNED_MESH))
+
+#define world_get_transform3d(w, e)    ((Transform3D*)world_get_component(w, e, COMPONENT_TRANSFORM3D))
+#define world_get_mesh_renderer(w, e)  ((MeshRenderer*)world_get_component(w, e, COMPONENT_MESH_RENDERER))
+#define world_get_camera(w, e)         ((Camera*)world_get_component(w, e, COMPONENT_CAMERA))
+#define world_get_light(w, e)          ((Light*)world_get_component(w, e, COMPONENT_LIGHT))
+#define world_get_skinned_mesh(w, e)   ((SkinnedMesh*)world_get_component(w, e, COMPONENT_SKINNED_MESH))
 
 // ============================================================================
 // Query (Iterate entities with specific components)

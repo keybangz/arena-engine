@@ -7,7 +7,11 @@
 // Component Registry
 // ============================================================================
 
+// Include 3D components for size registration
+#include "components_3d.h"
+
 static const size_t COMPONENT_SIZES[COMPONENT_TYPE_COUNT] = {
+    // 2D Components
     [COMPONENT_TRANSFORM] = sizeof(Transform),
     [COMPONENT_VELOCITY]  = sizeof(Velocity),
     [COMPONENT_SPRITE]    = sizeof(Sprite),
@@ -16,6 +20,13 @@ static const size_t COMPONENT_SIZES[COMPONENT_TYPE_COUNT] = {
     [COMPONENT_AI]        = sizeof(AI),
     [COMPONENT_COLLIDER]  = sizeof(Collider),
     [COMPONENT_TEAM]      = sizeof(Team),
+
+    // 3D Components (v0.8.0+)
+    [COMPONENT_TRANSFORM3D]    = sizeof(Transform3D),
+    [COMPONENT_MESH_RENDERER]  = sizeof(MeshRenderer),
+    [COMPONENT_CAMERA]         = sizeof(Camera),
+    [COMPONENT_LIGHT]          = sizeof(Light),
+    [COMPONENT_SKINNED_MESH]   = sizeof(SkinnedMesh),
 };
 
 // ============================================================================

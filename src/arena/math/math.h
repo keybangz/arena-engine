@@ -77,6 +77,7 @@ static inline Vec2 vec2_rotate(Vec2 v, float angle) {
 // Vec3
 // ============================================================================
 
+#define ARENA_VEC3_DEFINED
 typedef struct Vec3 {
     float x, y, z;
 } Vec3;
@@ -128,6 +129,7 @@ static inline Vec3 vec3_reflect(Vec3 v, Vec3 n) {
 // Include additional math types
 #include "vec3.h"
 #include "mat4.h"
+#include "vec4.h"
 #include "quat.h"
 
 #endif

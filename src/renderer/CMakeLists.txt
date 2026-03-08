@@ -3,6 +3,10 @@ add_library(arena-renderer STATIC
     renderer.c
     sprite_batch.h
     sprite_batch.c
+    mesh.h
+    mesh.c
+    render_3d.h
+    render_3d.c
 )
 
 target_include_directories(arena-renderer PRIVATE
@@ -69,6 +73,21 @@ if(GLSLANG_VALIDATOR)
         COMMENT "Compiling quad.frag"
     )
 
+    # 3D Mesh shaders
+    add_custom_command(
+        OUTPUT ${SHADER_OUT_DIR}/mesh.vert.spv
+        COMMAND ${GLSLANG_VALIDATOR} -V ${SHADER_DIR}/mesh.vert -o ${SHADER_OUT_DIR}/mesh.vert.spv
+        DEPENDS ${SHADER_DIR}/mesh.vert
+        COMMENT "Compiling mesh.vert"
+    )
+
+    add_custom_command(
+        OUTPUT ${SHADER_OUT_DIR}/mesh.frag.spv
+        COMMAND ${GLSLANG_VALIDATOR} -V ${SHADER_DIR}/mesh.frag -o ${SHADER_OUT_DIR}/mesh.frag.spv
+        DEPENDS ${SHADER_DIR}/mesh.frag
+        COMMENT "Compiling mesh.frag"
+    )
+
     add_custom_target(shaders ALL
         DEPENDS
             ${SHADER_OUT_DIR}/triangle.vert.spv
@@ -77,6 +96,8 @@ if(GLSLANG_VALIDATOR)
             ${SHADER_OUT_DIR}/sprite.frag.spv
             ${SHADER_OUT_DIR}/quad.vert.spv
             ${SHADER_OUT_DIR}/quad.frag.spv
+            ${SHADER_OUT_DIR}/mesh.vert.spv
+            ${SHADER_OUT_DIR}/mesh.frag.spv
     )
 
     add_dependencies(arena-renderer shaders)

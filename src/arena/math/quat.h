@@ -157,4 +157,50 @@ static inline Mat4 quat_to_mat4(Quat q) {
     return result;
 }
 
+// ----------------------------------------------------------------------------
+// Look At (create quaternion that looks from eye to target)
+// ----------------------------------------------------------------------------
+
+static inline Quat quat_look_at(Vec3 eye, Vec3 target, Vec3 up) {
+    Vec3 forward = vec3_normalize(vec3_sub(target, eye));
+    Vec3 right = vec3_normalize(vec3_cross(up, forward));
+    Vec3 actual_up = vec3_cross(forward, right);
+
+    // Build rotation matrix from axes
+    float m00 = right.x, m01 = right.y, m02 = right.z;
+    float m10 = actual_up.x, m11 = actual_up.y, m12 = actual_up.z;
+    float m20 = forward.x, m21 = forward.y, m22 = forward.z;
+
+    float trace = m00 + m11 + m22;
+    Quat q;
+
+    if (trace > 0) {
+        float s = 0.5f / sqrtf(trace + 1.0f);
+        q.w = 0.25f / s;
+        q.x = (m12 - m21) * s;
+        q.y = (m20 - m02) * s;
+        q.z = (m01 - m10) * s;
+    } else if (m00 > m11 && m00 > m22) {
+        float s = 2.0f * sqrtf(1.0f + m00 - m11 - m22);
+        q.w = (m12 - m21) / s;
+        q.x = 0.25f * s;
+        q.y = (m10 + m01) / s;
+        q.z = (m20 + m02) / s;
+    } else if (m11 > m22) {
+        float s = 2.0f * sqrtf(1.0f + m11 - m00 - m22);
+        q.w = (m20 - m02) / s;
+        q.x = (m10 + m01) / s;
+        q.y = 0.25f * s;
+        q.z = (m21 + m12) / s;
+    } else {
+        float s = 2.0f * sqrtf(1.0f + m22 - m00 - m11);
+        q.w = (m01 - m10) / s;
+        q.x = (m20 + m02) / s;
+        q.y = (m21 + m12) / s;
+        q.z = 0.25f * s;
+    }
+
+    return quat_normalize(q);
+}
+
 #endif

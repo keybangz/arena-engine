@@ -10,6 +10,7 @@ add_library(arena-core STATIC
     collections/hashmap.h
     math/vec3.c
     math/vec3.h
+    math/vec4.h
     math/mat4.c
     math/mat4.h
     math/quat.c
@@ -17,6 +18,7 @@ add_library(arena-core STATIC
     math/math.h
     ecs/ecs.c
     ecs/ecs.h
+    ecs/components_3d.h
     input/input.c
     input/input.h
     game/ability.h
@@ -31,6 +33,8 @@ add_library(arena-core STATIC
     game/champion.c
     game/item.h
     game/item.c
+    game/camera_system.h
+    game/camera_system.c
     map/map.h
     map/map.c
     world/world.h

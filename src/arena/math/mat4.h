@@ -52,6 +52,8 @@ static inline Vec3 mat4_mul_vec3(Mat4 m, Vec3 v, float w) {
     };
 }
 
+// Note: mat4_mul_vec4 is defined in vec4.h after Vec4 is fully defined
+
 static inline Mat4 mat4_transpose(Mat4 m) {
     Mat4 result;
     for (int c = 0; c < 4; c++) {
@@ -151,6 +153,87 @@ static inline Mat4 mat4_look_at(Vec3 eye, Vec3 target, Vec3 up) {
     result.m[3][0] = -vec3_dot(r, eye);
     result.m[3][1] = -vec3_dot(u, eye);
     result.m[3][2] = vec3_dot(f, eye);
+    return result;
+}
+
+// ----------------------------------------------------------------------------
+// Matrix Inverse (using adjugate method)
+// ----------------------------------------------------------------------------
+
+static inline float mat4_determinant(Mat4 m) {
+    float a = m.m[0][0], b = m.m[1][0], c = m.m[2][0], d = m.m[3][0];
+    float e = m.m[0][1], f = m.m[1][1], g = m.m[2][1], h = m.m[3][1];
+    float i = m.m[0][2], j = m.m[1][2], k = m.m[2][2], l = m.m[3][2];
+    float M = m.m[0][3], n = m.m[1][3], o = m.m[2][3], p = m.m[3][3];
+
+    float kp_lo = k * p - l * o;
+    float jp_ln = j * p - l * n;
+    float jo_kn = j * o - k * n;
+    float ip_lm = i * p - l * M;
+    float io_km = i * o - k * M;
+    float in_jm = i * n - j * M;
+
+    return a * (f * kp_lo - g * jp_ln + h * jo_kn)
+         - b * (e * kp_lo - g * ip_lm + h * io_km)
+         + c * (e * jp_ln - f * ip_lm + h * in_jm)
+         - d * (e * jo_kn - f * io_km + g * in_jm);
+}
+
+static inline Mat4 mat4_inverse(Mat4 m) {
+    float a = m.m[0][0], b = m.m[1][0], c = m.m[2][0], d = m.m[3][0];
+    float e = m.m[0][1], f = m.m[1][1], g = m.m[2][1], h = m.m[3][1];
+    float i = m.m[0][2], j = m.m[1][2], k = m.m[2][2], l = m.m[3][2];
+    float M = m.m[0][3], n = m.m[1][3], o = m.m[2][3], p = m.m[3][3];
+
+    float kp_lo = k * p - l * o, jp_ln = j * p - l * n, jo_kn = j * o - k * n;
+    float ip_lm = i * p - l * M, io_km = i * o - k * M, in_jm = i * n - j * M;
+    float gp_ho = g * p - h * o, fp_hn = f * p - h * n, fo_gn = f * o - g * n;
+    float ep_hm = e * p - h * M, eo_gm = e * o - g * M, en_fm = e * n - f * M;
+    float gl_hk = g * l - h * k, fl_hj = f * l - h * j, fk_gj = f * k - g * j;
+    float el_hi = e * l - h * i, ek_gi = e * k - g * i, ej_fi = e * j - f * i;
+
+    float det = a * (f * kp_lo - g * jp_ln + h * jo_kn)
+              - b * (e * kp_lo - g * ip_lm + h * io_km)
+              + c * (e * jp_ln - f * ip_lm + h * in_jm)
+              - d * (e * jo_kn - f * io_km + g * in_jm);
+
+    if (fabsf(det) < 1e-10f) return mat4_identity(); // Singular matrix
+
+    float inv_det = 1.0f / det;
+
+    Mat4 result;
+    result.m[0][0] =  (f * kp_lo - g * jp_ln + h * jo_kn) * inv_det;
+    result.m[0][1] = -(e * kp_lo - g * ip_lm + h * io_km) * inv_det;
+    result.m[0][2] =  (e * jp_ln - f * ip_lm + h * in_jm) * inv_det;
+    result.m[0][3] = -(e * jo_kn - f * io_km + g * in_jm) * inv_det;
+    result.m[1][0] = -(b * kp_lo - c * jp_ln + d * jo_kn) * inv_det;
+    result.m[1][1] =  (a * kp_lo - c * ip_lm + d * io_km) * inv_det;
+    result.m[1][2] = -(a * jp_ln - b * ip_lm + d * in_jm) * inv_det;
+    result.m[1][3] =  (a * jo_kn - b * io_km + c * in_jm) * inv_det;
+    result.m[2][0] =  (b * gp_ho - c * fp_hn + d * fo_gn) * inv_det;
+    result.m[2][1] = -(a * gp_ho - c * ep_hm + d * eo_gm) * inv_det;
+    result.m[2][2] =  (a * fp_hn - b * ep_hm + d * en_fm) * inv_det;
+    result.m[2][3] = -(a * fo_gn - b * eo_gm + c * en_fm) * inv_det;
+    result.m[3][0] = -(b * gl_hk - c * fl_hj + d * fk_gj) * inv_det;
+    result.m[3][1] =  (a * gl_hk - c * el_hi + d * ek_gi) * inv_det;
+    result.m[3][2] = -(a * fl_hj - b * el_hi + d * ej_fi) * inv_det;
+    result.m[3][3] =  (a * fk_gj - b * ek_gi + c * ej_fi) * inv_det;
+    return result;
+}
+
+// Fast inverse for orthonormal matrices (rotation + translation only)
+static inline Mat4 mat4_inverse_orthonormal(Mat4 m) {
+    // For orthonormal matrices: inverse = transpose of rotation, negated translation
+    Mat4 result = mat4_identity();
+    // Transpose 3x3 rotation part
+    result.m[0][0] = m.m[0][0]; result.m[0][1] = m.m[1][0]; result.m[0][2] = m.m[2][0];
+    result.m[1][0] = m.m[0][1]; result.m[1][1] = m.m[1][1]; result.m[1][2] = m.m[2][1];
+    result.m[2][0] = m.m[0][2]; result.m[2][1] = m.m[1][2]; result.m[2][2] = m.m[2][2];
+    // Negate and transform translation
+    Vec3 trans = {m.m[3][0], m.m[3][1], m.m[3][2]};
+    result.m[3][0] = -vec3_dot((Vec3){result.m[0][0], result.m[1][0], result.m[2][0]}, trans);
+    result.m[3][1] = -vec3_dot((Vec3){result.m[0][1], result.m[1][1], result.m[2][1]}, trans);
+    result.m[3][2] = -vec3_dot((Vec3){result.m[0][2], result.m[1][2], result.m[2][2]}, trans);
     return result;
 }
 
