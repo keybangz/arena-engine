@@ -109,6 +109,10 @@ typedef struct Render3D {
     float light_intensity;
     float ambient_intensity;
     
+    // Dimensions
+    uint32_t width;
+    uint32_t height;
+
     // State
     bool initialized;
 } Render3D;

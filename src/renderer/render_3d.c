@@ -714,6 +714,8 @@ bool render3d_init(Render3D* r3d,
     r3d->mesh_manager = mesh_manager;
     r3d->texture_manager = texture_manager;
     r3d->material_manager = material_manager;
+    r3d->width = width;
+    r3d->height = height;
 
     // Create depth buffer
     if (!create_depth_buffer(r3d, width, height)) {
@@ -844,6 +846,22 @@ void render3d_end_frame(Render3D* r3d, VkCommandBuffer cmd, uint32_t frame_index
 
     // Bind 3D pipeline
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r3d->pipeline);
+
+    // Set viewport and scissor (dynamic state)
+    VkViewport viewport = {
+        .x = 0, .y = 0,
+        .width = (float)r3d->width,
+        .height = (float)r3d->height,
+        .minDepth = 0.0f,
+        .maxDepth = 1.0f
+    };
+    vkCmdSetViewport(cmd, 0, 1, &viewport);
+
+    VkRect2D scissor = {
+        .offset = {0, 0},
+        .extent = {r3d->width, r3d->height}
+    };
+    vkCmdSetScissor(cmd, 0, 1, &scissor);
 
     // Bind default texture (set 1)
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r3d->pipeline_layout,
