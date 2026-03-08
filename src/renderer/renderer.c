@@ -59,9 +59,13 @@ struct Renderer {
     VkRenderPass render_pass;
     VkFramebuffer* framebuffers;
 
-    // Pipeline
+    // Pipeline (triangle)
     VkPipelineLayout pipeline_layout;
     VkPipeline graphics_pipeline;
+
+    // Pipeline (quad with push constants)
+    VkPipelineLayout quad_pipeline_layout;
+    VkPipeline quad_pipeline;
 
     // Command buffers
     VkCommandPool command_pool;
@@ -753,6 +757,162 @@ static bool create_graphics_pipeline(Renderer* r) {
     return true;
 }
 
+// Push constant structure for quad rendering
+typedef struct QuadPushConstants {
+    float rect[4];       // x, y, width, height
+    float color[4];      // r, g, b, a
+    float screenSize[2]; // width, height
+} QuadPushConstants;
+
+static bool create_quad_pipeline(Renderer* r) {
+    // Load quad shaders
+    size_t vert_size, frag_size;
+    char* vert_code = read_file("shaders/quad.vert.spv", &vert_size);
+    if (!vert_code) vert_code = read_file("src/renderer/shaders/quad.vert.spv", &vert_size);
+
+    char* frag_code = read_file("shaders/quad.frag.spv", &frag_size);
+    if (!frag_code) frag_code = read_file("src/renderer/shaders/quad.frag.spv", &frag_size);
+
+    if (!vert_code || !frag_code) {
+        fprintf(stderr, "Failed to load quad shader files\n");
+        free(vert_code);
+        free(frag_code);
+        return false;
+    }
+
+    VkShaderModule vert_module = create_shader_module(r->device, vert_code, vert_size);
+    VkShaderModule frag_module = create_shader_module(r->device, frag_code, frag_size);
+    free(vert_code);
+    free(frag_code);
+
+    if (!vert_module || !frag_module) {
+        fprintf(stderr, "Failed to create quad shader modules\n");
+        if (vert_module) vkDestroyShaderModule(r->device, vert_module, NULL);
+        if (frag_module) vkDestroyShaderModule(r->device, frag_module, NULL);
+        return false;
+    }
+
+    // Shader stages
+    VkPipelineShaderStageCreateInfo stages[] = {
+        {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+            .stage = VK_SHADER_STAGE_VERTEX_BIT,
+            .module = vert_module,
+            .pName = "main"
+        },
+        {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+            .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+            .module = frag_module,
+            .pName = "main"
+        }
+    };
+
+    VkPipelineVertexInputStateCreateInfo vertex_input = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO
+    };
+
+    VkPipelineInputAssemblyStateCreateInfo input_assembly = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+        .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+        .primitiveRestartEnable = VK_FALSE
+    };
+
+    VkDynamicState dynamic_states[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
+    VkPipelineDynamicStateCreateInfo dynamic_state = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+        .dynamicStateCount = 2,
+        .pDynamicStates = dynamic_states
+    };
+
+    VkPipelineViewportStateCreateInfo viewport_state = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+        .viewportCount = 1,
+        .scissorCount = 1
+    };
+
+    VkPipelineRasterizationStateCreateInfo rasterizer = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+        .polygonMode = VK_POLYGON_MODE_FILL,
+        .lineWidth = 1.0f,
+        .cullMode = VK_CULL_MODE_NONE,  // No culling for 2D
+        .frontFace = VK_FRONT_FACE_CLOCKWISE
+    };
+
+    VkPipelineMultisampleStateCreateInfo multisampling = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+        .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT
+    };
+
+    // Enable alpha blending
+    VkPipelineColorBlendAttachmentState blend_attachment = {
+        .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                          VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
+        .blendEnable = VK_TRUE,
+        .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
+        .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+        .colorBlendOp = VK_BLEND_OP_ADD,
+        .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
+        .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
+        .alphaBlendOp = VK_BLEND_OP_ADD
+    };
+    VkPipelineColorBlendStateCreateInfo color_blending = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+        .attachmentCount = 1,
+        .pAttachments = &blend_attachment
+    };
+
+    // Push constant range
+    VkPushConstantRange push_range = {
+        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+        .offset = 0,
+        .size = sizeof(QuadPushConstants)
+    };
+
+    VkPipelineLayoutCreateInfo layout_info = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .pushConstantRangeCount = 1,
+        .pPushConstantRanges = &push_range
+    };
+
+    if (vkCreatePipelineLayout(r->device, &layout_info, NULL, &r->quad_pipeline_layout) != VK_SUCCESS) {
+        fprintf(stderr, "Failed to create quad pipeline layout\n");
+        vkDestroyShaderModule(r->device, vert_module, NULL);
+        vkDestroyShaderModule(r->device, frag_module, NULL);
+        return false;
+    }
+
+    VkGraphicsPipelineCreateInfo pipeline_info = {
+        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+        .stageCount = 2,
+        .pStages = stages,
+        .pVertexInputState = &vertex_input,
+        .pInputAssemblyState = &input_assembly,
+        .pViewportState = &viewport_state,
+        .pRasterizationState = &rasterizer,
+        .pMultisampleState = &multisampling,
+        .pColorBlendState = &color_blending,
+        .pDynamicState = &dynamic_state,
+        .layout = r->quad_pipeline_layout,
+        .renderPass = r->render_pass,
+        .subpass = 0
+    };
+
+    VkResult result = vkCreateGraphicsPipelines(
+        r->device, VK_NULL_HANDLE, 1, &pipeline_info, NULL, &r->quad_pipeline);
+
+    vkDestroyShaderModule(r->device, vert_module, NULL);
+    vkDestroyShaderModule(r->device, frag_module, NULL);
+
+    if (result != VK_SUCCESS) {
+        fprintf(stderr, "Failed to create quad pipeline\n");
+        return false;
+    }
+
+    printf("Quad pipeline created\n");
+    return true;
+}
+
 // ============================================================================
 // Command Buffers & Sync
 // ============================================================================
@@ -882,6 +1042,7 @@ Renderer* renderer_create_with_config(GLFWwindow* window, Arena* arena, Renderer
     if (!create_render_pass(r)) goto fail;
     if (!create_framebuffers(r)) goto fail;
     if (!create_graphics_pipeline(r)) goto fail;
+    if (!create_quad_pipeline(r)) goto fail;
     if (!create_command_pool(r)) goto fail;
     if (!create_command_buffers(r)) goto fail;
     if (!create_sync_objects(r)) goto fail;
@@ -921,12 +1082,18 @@ void renderer_destroy(Renderer* r) {
             vkDestroyCommandPool(r->device, r->command_pool, NULL);
         }
 
-        // Pipeline
+        // Pipelines
         if (r->graphics_pipeline) {
             vkDestroyPipeline(r->device, r->graphics_pipeline, NULL);
         }
         if (r->pipeline_layout) {
             vkDestroyPipelineLayout(r->device, r->pipeline_layout, NULL);
+        }
+        if (r->quad_pipeline) {
+            vkDestroyPipeline(r->device, r->quad_pipeline, NULL);
+        }
+        if (r->quad_pipeline_layout) {
+            vkDestroyPipelineLayout(r->device, r->quad_pipeline_layout, NULL);
         }
 
         // Framebuffers and swapchain
@@ -1041,11 +1208,33 @@ bool renderer_begin_frame(Renderer* r) {
     VkRect2D scissor = {{0, 0}, r->swapchain_extent};
     vkCmdSetScissor(cmd, 0, 1, &scissor);
 
-    // Bind pipeline and draw triangle
-    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r->graphics_pipeline);
-    vkCmdDraw(cmd, 3, 1, 0, 0);  // 3 vertices, 1 instance
+    // Draw calls happen between begin_frame and end_frame via renderer_draw_quad
 
     return true;
+}
+
+void renderer_draw_quad(Renderer* r,
+                        float x, float y, float width, float height,
+                        float cr, float cg, float cb, float ca) {
+    if (!r || !r->is_valid) return;
+
+    VkCommandBuffer cmd = r->command_buffers[r->current_frame];
+
+    // Bind quad pipeline
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r->quad_pipeline);
+
+    // Set push constants
+    QuadPushConstants pc = {
+        .rect = {x, y, width, height},
+        .color = {cr, cg, cb, ca},
+        .screenSize = {(float)r->swapchain_extent.width, (float)r->swapchain_extent.height}
+    };
+
+    vkCmdPushConstants(cmd, r->quad_pipeline_layout,
+                       VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);
+
+    // Draw 6 vertices (2 triangles = 1 quad)
+    vkCmdDraw(cmd, 6, 1, 0, 0);
 }
 
 void renderer_end_frame(Renderer* r) {
@@ -1128,4 +1317,15 @@ void renderer_on_resize(Renderer* r, int width, int height) {
 
 uint64_t renderer_get_frame_count(const Renderer* r) {
     return r ? r->frame_count : 0;
+}
+
+void* renderer_get_command_buffer(Renderer* r) {
+    if (!r) return NULL;
+    return r->command_buffers[r->current_frame];
+}
+
+void renderer_get_extent(Renderer* r, uint32_t* width, uint32_t* height) {
+    if (!r) return;
+    if (width) *width = r->swapchain_extent.width;
+    if (height) *height = r->swapchain_extent.height;
 }

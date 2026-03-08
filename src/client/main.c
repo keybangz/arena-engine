@@ -3,6 +3,7 @@
 #include "arena/ecs/ecs.h"
 #include "arena/input/input.h"
 #include "renderer/renderer.h"
+#include "renderer/sprite_batch.h"
 
 #include <GLFW/glfw3.h>
 #include <stdio.h>
@@ -15,7 +16,7 @@
 
 #define WINDOW_WIDTH  1280
 #define WINDOW_HEIGHT 720
-#define WINDOW_TITLE  "Arena Engine v0.3.0"
+#define WINDOW_TITLE  "Arena Engine v0.4.0"
 
 #define GAME_MAX_ENTITIES 10000
 
@@ -53,6 +54,7 @@ typedef struct GameState {
 
     // Renderer
     Renderer* renderer;
+    SpriteBatch* sprite_batch;
 
     // ECS
     World* world;
@@ -190,12 +192,48 @@ static bool init_game(void) {
     player_comp->player_id = 0;
     player_comp->team = 0;
 
+    // Add sprite component for rendering
+    Sprite* player_sprite = world_add_sprite(g_state.world, g_state.player);
+    player_sprite->width = 32.0f;
+    player_sprite->height = 32.0f;
+    player_sprite->color = sprite_color(0, 200, 255, 255);  // Cyan color
+    player_sprite->layer = 10;
+
     printf("Player entity created at (%.0f, %.0f)\n", player_transform->x, player_transform->y);
+
+    // Create some test entities (enemies)
+    for (int i = 0; i < 5; i++) {
+        Entity enemy = world_spawn(g_state.world);
+        Transform* t = world_add_transform(g_state.world, enemy);
+        t->x = 200.0f + i * 180.0f;
+        t->y = 200.0f;
+        t->scale_x = 1.0f;
+        t->scale_y = 1.0f;
+
+        Sprite* s = world_add_sprite(g_state.world, enemy);
+        s->width = 28.0f;
+        s->height = 28.0f;
+        s->color = sprite_color(255, 50, 50, 255);  // Red enemies
+        s->layer = 5;
+
+        // Add health component
+        Health* h = world_add_health(g_state.world, enemy);
+        h->current = 100.0f;
+        h->max = 100.0f;
+    }
+    printf("Created 5 test enemies\n");
 
     // Initialize renderer
     g_state.renderer = renderer_create(g_state.window, g_state.persistent_arena);
     if (!g_state.renderer) {
         fprintf(stderr, "Failed to create renderer\n");
+        return false;
+    }
+
+    // Initialize sprite batch
+    g_state.sprite_batch = sprite_batch_create(g_state.renderer);
+    if (!g_state.sprite_batch) {
+        fprintf(stderr, "Failed to create sprite batch\n");
         return false;
     }
 
@@ -244,26 +282,47 @@ static void fixed_update(double dt) {
 }
 
 static void render(double alpha) {
-    (void)alpha;  // Will be used for interpolation when ECS is implemented
-
-    // Interpolate between states using alpha for smooth rendering
+    (void)alpha;  // Will be used for interpolation
     g_state.frame_count++;
 
     // Reset frame arena each frame
     arena_reset(g_state.frame_arena);
 
-    // Print player position every 60 frames (~1 second)
-    if (g_state.frame_count % 60 == 0) {
+    // Print player position every 120 frames (~2 seconds)
+    if (g_state.frame_count % 120 == 0) {
         Transform* t = world_get_transform(g_state.world, g_state.player);
         if (t) {
-            printf("Player position: (%.1f, %.1f) - Use WASD to move\n", t->x, t->y);
+            printf("Player: (%.1f, %.1f) | Entities: %u | Frame: %lu\n",
+                   t->x, t->y, world_entity_count(g_state.world),
+                   (unsigned long)g_state.frame_count);
         }
     }
 
     // Render
     if (renderer_begin_frame(g_state.renderer)) {
-        // Triangle is rendered in begin_frame for now
-        // TODO: Sprite rendering system
+        // Draw all entities with Transform + Sprite components
+        Query sprite_query = world_query(g_state.world,
+            component_mask(COMPONENT_TRANSFORM) | component_mask(COMPONENT_SPRITE));
+
+        Entity entity;
+        while (query_next(&sprite_query, &entity)) {
+            Transform* t = world_get_transform(g_state.world, entity);
+            Sprite* s = world_get_sprite(g_state.world, entity);
+
+            if (t && s) {
+                // Draw sprite centered at transform position
+                float x = t->x - s->width * 0.5f;
+                float y = t->y - s->height * 0.5f;
+
+                // Extract color components
+                float r = (s->color & 0xFF) / 255.0f;
+                float g = ((s->color >> 8) & 0xFF) / 255.0f;
+                float b = ((s->color >> 16) & 0xFF) / 255.0f;
+                float a = ((s->color >> 24) & 0xFF) / 255.0f;
+
+                renderer_draw_quad(g_state.renderer, x, y, s->width, s->height, r, g, b, a);
+            }
+        }
 
         renderer_end_frame(g_state.renderer);
     }
@@ -315,6 +374,11 @@ static void run_game_loop(void) {
 // ============================================================================
 
 static void shutdown_game(void) {
+    if (g_state.sprite_batch) {
+        sprite_batch_destroy(g_state.sprite_batch);
+        g_state.sprite_batch = NULL;
+    }
+
     if (g_state.renderer) {
         renderer_destroy(g_state.renderer);
         g_state.renderer = NULL;
@@ -345,7 +409,7 @@ static void shutdown_game(void) {
 int main(int argc, char** argv) {
     (void)argc; (void)argv;
 
-    printf("Arena Engine Client v0.3.0\n");
+    printf("Arena Engine Client v0.4.0\n");
     printf("==========================\n");
 
     if (!init_window()) {

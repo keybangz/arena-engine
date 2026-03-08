@@ -52,8 +52,13 @@ void renderer_on_resize(Renderer* renderer, int width, int height);
 // Stats
 uint64_t renderer_get_frame_count(const Renderer* renderer);
 
-// Simple shape drawing (temporary until sprite system)
-void renderer_set_viewport_size(Renderer* renderer, float width, float height);
-void renderer_draw_quad(Renderer* renderer, float x, float y, float width, float height, uint32_t color);
+// Get current command buffer (for sprite batch integration)
+void* renderer_get_command_buffer(Renderer* renderer);
+void renderer_get_extent(Renderer* renderer, uint32_t* width, uint32_t* height);
+
+// Draw a colored quad (call between begin_frame and end_frame)
+void renderer_draw_quad(Renderer* renderer,
+                        float x, float y, float width, float height,
+                        float r, float g, float b, float a);
 
 #endif
