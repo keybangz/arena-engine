@@ -19,6 +19,10 @@ add_library(arena-core STATIC
     ecs/ecs.h
     input/input.c
     input/input.h
+    game/ability.h
+    game/ability.c
+    game/combat.h
+    game/combat.c
     world/world.h
     network/network.h
     server/server.h

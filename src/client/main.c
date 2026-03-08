@@ -2,6 +2,8 @@
 #include "arena/math/math.h"
 #include "arena/ecs/ecs.h"
 #include "arena/input/input.h"
+#include "arena/game/ability.h"
+#include "arena/game/combat.h"
 #include "renderer/renderer.h"
 #include "renderer/sprite_batch.h"
 
@@ -168,6 +170,9 @@ static bool init_game(void) {
     input_init(&g_state.input);
     input_set_callback_target(&g_state.input);
 
+    // Initialize ability registry
+    ability_registry_init();
+
     // Initialize ECS world
     g_state.world = world_create(g_state.persistent_arena, GAME_MAX_ENTITIES);
     if (!g_state.world) {
@@ -259,6 +264,13 @@ static void fixed_update(double dt) {
         vel->y = move_y * PLAYER_SPEED;
     }
 
+    // Fire projectile on left mouse click
+    if (input_mouse_pressed(&g_state.input, MOUSE_BUTTON_LEFT)) {
+        double mx, my;
+        input_mouse_position(&g_state.input, &mx, &my);
+        ability_try_cast(g_state.world, g_state.player, 0, (float)mx, (float)my, ENTITY_NULL);
+    }
+
     // Movement system: apply velocity to all entities with Transform + Velocity
     Query move_query = world_query(g_state.world,
         component_mask(COMPONENT_TRANSFORM) | component_mask(COMPONENT_VELOCITY));
@@ -272,13 +284,26 @@ static void fixed_update(double dt) {
             t->x += v->x * (float)dt;
             t->y += v->y * (float)dt;
 
-            // Keep player in bounds
-            if (t->x < 0) t->x = 0;
-            if (t->y < 0) t->y = 0;
-            if (t->x > g_state.window_width) t->x = (float)g_state.window_width;
-            if (t->y > g_state.window_height) t->y = (float)g_state.window_height;
+            // Keep entities in bounds (despawn if out of screen)
+            bool in_bounds = t->x >= -100 && t->x <= g_state.window_width + 100 &&
+                            t->y >= -100 && t->y <= g_state.window_height + 100;
+
+            // Only clamp player, let projectiles fly off
+            if (world_has_component(g_state.world, entity, COMPONENT_PLAYER)) {
+                if (t->x < 0) t->x = 0;
+                if (t->y < 0) t->y = 0;
+                if (t->x > g_state.window_width) t->x = (float)g_state.window_width;
+                if (t->y > g_state.window_height) t->y = (float)g_state.window_height;
+            } else if (!in_bounds) {
+                // Despawn projectiles that go off screen
+                world_despawn(g_state.world, entity);
+            }
         }
     }
+
+    // Run combat systems
+    combat_projectile_system(g_state.world, (float)dt);
+    combat_death_system(g_state.world, (float)dt);
 }
 
 static void render(double alpha) {
