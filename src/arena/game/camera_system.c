@@ -32,11 +32,15 @@ void camera_controller_init(CameraController* cc) {
 void camera_update_matrices(Camera* cam, Transform3D* transform, float aspect_ratio) {
     // Update local matrix if dirty
     transform3d_update_local(transform);
-    
-    // Create view matrix from transform
-    // View matrix is inverse of camera's world transform
-    cam->view_matrix = mat4_inverse(transform->local_matrix);
-    
+
+    // Compute forward direction from rotation
+    Vec3 forward = quat_forward(transform->rotation);
+    Vec3 target = vec3_add(transform->position, forward);
+    Vec3 up = quat_up(transform->rotation);
+
+    // Create view matrix using look-at
+    cam->view_matrix = mat4_look_at(transform->position, target, up);
+
     // Create projection matrix based on camera type
     if (cam->projection == CAMERA_PERSPECTIVE) {
         cam->projection_matrix = mat4_perspective(cam->fov, aspect_ratio,
@@ -48,10 +52,10 @@ void camera_update_matrices(Camera* cam, Transform3D* transform, float aspect_ra
                                             -half_height, half_height,
                                             cam->near_plane, cam->far_plane);
     }
-    
+
     // Combine view and projection
     cam->view_projection = mat4_mul(cam->projection_matrix, cam->view_matrix);
-    
+
     // Extract frustum planes for culling
     camera_extract_frustum_planes(cam);
 }

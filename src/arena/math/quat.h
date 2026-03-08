@@ -158,6 +158,37 @@ static inline Mat4 quat_to_mat4(Quat q) {
 }
 
 // ----------------------------------------------------------------------------
+// Direction Vectors from Quaternion
+// ----------------------------------------------------------------------------
+
+// Get the forward direction (negative Z axis) rotated by quaternion
+static inline Vec3 quat_forward(Quat q) {
+    return (Vec3){
+        2.0f * (q.x * q.z + q.w * q.y),
+        2.0f * (q.y * q.z - q.w * q.x),
+        1.0f - 2.0f * (q.x * q.x + q.y * q.y)
+    };
+}
+
+// Get the up direction (positive Y axis) rotated by quaternion
+static inline Vec3 quat_up(Quat q) {
+    return (Vec3){
+        2.0f * (q.x * q.y - q.w * q.z),
+        1.0f - 2.0f * (q.x * q.x + q.z * q.z),
+        2.0f * (q.y * q.z + q.w * q.x)
+    };
+}
+
+// Get the right direction (positive X axis) rotated by quaternion
+static inline Vec3 quat_right(Quat q) {
+    return (Vec3){
+        1.0f - 2.0f * (q.y * q.y + q.z * q.z),
+        2.0f * (q.x * q.y + q.w * q.z),
+        2.0f * (q.x * q.z - q.w * q.y)
+    };
+}
+
+// ----------------------------------------------------------------------------
 // Look At (create quaternion that looks from eye to target)
 // ----------------------------------------------------------------------------
 
