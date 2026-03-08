@@ -7,6 +7,8 @@
 #include "arena/game/combat.h"
 #include "arena/game/ai.h"
 #include "arena/game/spawner.h"
+#include "arena/game/champion.h"
+#include "arena/game/item.h"
 #include "arena/map/map.h"
 
 #include <stdio.h>
@@ -175,7 +177,7 @@ static void run_server_loop(void) {
 int main(int argc, char** argv) {
     (void)argc; (void)argv;
 
-    printf("Arena Engine Server v0.6.0\n");
+    printf("Arena Engine Server v0.7.0\n");
     printf("==========================\n");
 
     // Setup signal handler
@@ -188,8 +190,10 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    // Initialize ability registry
+    // Initialize registries
     ability_registry_init();
+    champion_registry_init();
+    item_registry_init();
 
     // Create memory arenas
     g_server.persistent_arena = arena_create(64 * 1024 * 1024);  // 64 MB

@@ -27,6 +27,10 @@ add_library(arena-core STATIC
     game/ai.c
     game/spawner.h
     game/spawner.c
+    game/champion.h
+    game/champion.c
+    game/item.h
+    game/item.c
     map/map.h
     map/map.c
     world/world.h
