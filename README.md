@@ -130,9 +130,53 @@ arena-engine/
 
 ## License
 
-[License information here]
+This project is licensed under the **MIT License**.
+
+```
+MIT License
+
+Copyright (c) 2026 Arena Engine Contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+See [LICENSE](LICENSE) for the full license text.
+
+### What This Means
+
+The MIT License is a permissive open-source license that allows you to:
+- ✅ Use the software for any purpose (commercial or personal)
+- ✅ Modify the source code
+- ✅ Distribute copies
+- ✅ Sublicense to others
+
+**Requirements:**
+- Include the original copyright notice and license in any copy or substantial portion of the software
 
 ## Contributing
 
-[Contribution guidelines here]
+Contributions are welcome! Please follow these guidelines:
+
+1. **Fork the repository** and create your branch from `main`
+2. **Follow the code style** — C11 standard, consistent formatting
+3. **Test your changes** — Ensure the build passes before submitting
+4. **Submit a pull request** with a clear description of your changes
+
+For major changes, please open an issue first to discuss what you would like to change.
 

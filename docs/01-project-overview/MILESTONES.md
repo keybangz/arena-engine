@@ -9,35 +9,50 @@ This document outlines the development roadmap from the initial state (v0.1.0) t
 
 ### Implementation Progress
 
-| Version | Milestone | Status | LOC Added | Git Commit |
-|---------|-----------|--------|-----------|------------|
+| Version | Milestone | Status | Est. LOC | Git Commit |
+|---------|-----------|--------|----------|------------|
 | v0.2.0 | Foundation | ✅ Complete | ~2,150 | `3a27881` |
 | v0.3.0 | Movement | ✅ Complete | ~555 | `d235b82` |
 | v0.4.0 | Combat | ✅ Complete | ~880 | `1457de0` |
 | v0.5.0 | Multiplayer | ✅ Complete | ~1,000 | `ccf0547` |
 | v0.6.0 | Arena Alpha | ✅ Complete | ~1,025 | `1aba6f4` |
 | v0.7.0 | Content | ✅ Complete | ~755 | `fc37cf3` |
-| v0.8.0 | Polish | ⬜ Planned | - | - |
-| v1.0.0 | Release | ⬜ Planned | - | - |
-| **Total** | | | **~6,365** | |
+| v0.8.0 | **3D Foundation** | ⬜ Planned | ~1,850 | - |
+| v0.9.0 | **3D Materials** | ⬜ Planned | ~1,450 | - |
+| v0.10.0 | **3D Animation** | ⬜ Planned | ~1,400 | - |
+| v1.0.0 | Release | ⬜ Planned | ~3,600 | - |
+| **Implemented** | | | **~6,365** | |
+| **3D Transition** | | | **~4,700** | |
 
 ### Current State Assessment (v0.7.0)
 
-| System | Status | Notes |
-|--------|--------|-------|
-| Arena Allocator | ✅ Complete | Persistent + per-tick arenas |
-| HashMap | ✅ Complete | Open addressing with linear probing |
-| Array | ✅ Complete | Dynamic array with growth |
-| Vec3/Mat4 | ✅ Complete | Full math library |
-| ECS | ✅ Complete | Sparse-set based with queries |
-| Renderer | ✅ Complete | Vulkan quad pipeline |
-| Input | ✅ Complete | GLFW keyboard + mouse |
-| Combat | ✅ Complete | Abilities, projectiles, damage |
-| Network | ✅ Complete | UDP client-server |
-| Map | ✅ Complete | Tile-based arena |
-| AI | ✅ Complete | Minions and towers |
-| Champions | ✅ Complete | 3 champions with stats |
-| Items | ✅ Complete | 9 items with inventory |
+| System | Status | 3D Readiness |
+|--------|--------|--------------|
+| Arena Allocator | ✅ Complete | ✅ Ready |
+| HashMap | ✅ Complete | ✅ Ready |
+| Array | ✅ Complete | ✅ Ready |
+| Vec3/Mat4/Quat | ✅ Complete | ✅ Ready |
+| ECS | ✅ Complete | ⚠️ Needs 3D components |
+| Vulkan Renderer | ✅ Complete | ⚠️ Needs depth buffer, mesh pipeline |
+| Input | ✅ Complete | ✅ Ready |
+| Combat/AI | ✅ Complete | ✅ Logic layer unchanged |
+| Network | ✅ Complete | ✅ Unchanged |
+| Map | ✅ Complete | ⚠️ Needs 3D terrain |
+| Champions | ✅ Complete | ⚠️ Needs 3D models |
+| Items | ✅ Complete | ✅ Ready |
+
+### 3D Transition Overview
+
+The engine is transitioning from 2D quad-based rendering to full 3D mesh rendering:
+
+| Phase | Version | Focus | Duration |
+|-------|---------|-------|----------|
+| Foundation | v0.8.0 | Mesh pipeline, glTF, camera | 2-3 weeks |
+| Materials | v0.9.0 | PBR, shadows, lighting | 2-3 weeks |
+| Animation | v0.10.0 | Skeletal, instancing, culling | 2-3 weeks |
+| Release | v1.0.0 | Polish, performance, assets | 4-6 weeks |
+
+**Reference:** [3D_IMPLEMENTATION_PROPOSAL.md](../03-design/3d-rendering/3D_IMPLEMENTATION_PROPOSAL.md)
 
 ---
 
@@ -999,174 +1014,274 @@ uint32_t economy_exp_for_level(uint32_t level);
 
 ---
 
-## v0.8.0 - "Polish"
+## v0.8.0 - "3D Foundation"
 
-**Goal:** Visual effects, audio, complete UI, smooth gameplay feel
-**Duration:** 4-5 weeks
-**Complexity:** Medium
+**Goal:** Transition to 3D mesh rendering while preserving gameplay
+**Duration:** 2-3 weeks
+**Complexity:** Medium-High
+**Reference:** [3D_IMPLEMENTATION_PROPOSAL.md](../03-design/3d-rendering/3D_IMPLEMENTATION_PROPOSAL.md)
 
 ### Prerequisites
 - v0.7.0 complete
-- Core gameplay feature-complete
+- cgltf library integrated
+- stb_image library integrated
+
+### Focus Areas
+- **Rendering:** Forward rendering, depth buffer, mesh pipeline
+- **Assets:** glTF 2.0 loading via cgltf
+- **Components:** Transform3D, MeshRenderer, Camera, Light
+- **Shading:** Static mesh + basic diffuse lighting
 
 ### Deliverables
 
-#### 1. Particle System (~500 LOC)
+#### 1. 3D Components (~350 LOC)
 
-**File: `src/renderer/particles.h` + `.c`**
+**Files:** `src/arena/ecs/components_3d.h`
+- Transform3D component (position, rotation, scale, matrices)
+- MeshRenderer component (mesh_id, material_id, bounds)
+- Camera component (projection, frustum planes)
+- Light component (directional, point, spot)
+
+#### 2. Mesh Pipeline (~600 LOC)
+
+**Files:** `src/renderer/mesh.c/h`
 ```c
-typedef struct ParticleSystem ParticleSystem;
+typedef struct Vertex3D {
+    float position[3];
+    float normal[3];
+    float uv[2];
+} Vertex3D;
 
-typedef struct {
-    Vec3 position;
-    Vec3 velocity;
-    Vec3 acceleration;
-    Vec3 color_start;
-    Vec3 color_end;
-    float size_start;
-    float size_end;
-    float lifetime;
-} ParticleEmitterDef;
-
-ParticleSystem* particles_create(Renderer* renderer, size_t max_particles);
-void particles_destroy(ParticleSystem* ps);
-void particles_emit(ParticleSystem* ps, const ParticleEmitterDef* def, int count);
-void particles_update(ParticleSystem* ps, float dt);
-void particles_render(ParticleSystem* ps, const Camera* camera);
+typedef struct Mesh {
+    VkBuffer vertex_buffer;
+    VkBuffer index_buffer;
+    uint32_t vertex_count;
+    uint32_t index_count;
+} Mesh;
 ```
 
-#### 2. Effect Presets (~300 LOC data)
+#### 3. glTF Loader (~400 LOC)
 
-**File: `src/renderer/effects.h` + `.c`**
-```c
-void effect_spawn_hit(ParticleSystem* ps, Vec3 pos);
-void effect_spawn_death(ParticleSystem* ps, Vec3 pos);
-void effect_spawn_levelup(ParticleSystem* ps, Vec3 pos);
-void effect_spawn_ability_q(ParticleSystem* ps, Vec3 pos, uint32_t champion_id);
-// ... etc for each ability
+**Files:** `src/renderer/gltf_loader.c/h`
+- Load glTF 2.0 binary (.glb) and text (.gltf)
+- Extract meshes, materials, textures
+- Via cgltf (header-only)
+
+#### 4. Camera System (~150 LOC)
+
+**Files:** `src/arena/game/camera_system.c/h`
+- Isometric camera (55-60° pitch, fixed yaw)
+- View/projection matrix calculation
+- Screen-to-world raycasting
+- Edge scrolling
+
+#### 5. Lighting System (~200 LOC)
+
+**Files:** `src/renderer/lighting.c/h`
+- Directional light (sun)
+- Point lights (up to 8)
+- Forward pass with light accumulation
+
+#### 6. Basic 3D Shaders (~150 LOC)
+
+**Files:** `src/renderer/shaders/mesh.vert`, `mesh.frag`
+- Static mesh vertex shader
+- Blinn-Phong fragment shader
+- Texture sampling
+
+**New Files:**
 ```
-
-#### 3. Audio System (~400 LOC)
-
-**File: `src/audio/audio.h` + `.c`**
-```c
-typedef struct AudioSystem AudioSystem;
-typedef uint32_t SoundId;
-
-AudioSystem* audio_create(void);
-void audio_destroy(AudioSystem* audio);
-SoundId audio_load(AudioSystem* audio, const char* path);
-void audio_play(AudioSystem* audio, SoundId sound);
-void audio_play_at(AudioSystem* audio, SoundId sound, Vec3 position);
-void audio_set_listener(AudioSystem* audio, Vec3 pos, Vec3 forward);
-void audio_set_volume(AudioSystem* audio, float volume);
-void audio_set_music(AudioSystem* audio, const char* path);
-```
-
-#### 4. Sound Effects Library (~200 LOC data)
-
-- Attack sounds (per champion type)
-- Ability sounds (25 abilities)
-- UI sounds (click, buy, ping)
-- Ambient sounds (minion march, tower idle)
-- Victory/defeat jingles
-
-#### 5. UI Framework (~600 LOC)
-
-**File: `src/renderer/ui/ui.h` + `.c`**
-```c
-typedef struct UI UI;
-
-UI* ui_create(Renderer* renderer);
-void ui_destroy(UI* ui);
-void ui_begin(UI* ui);
-void ui_end(UI* ui);
-
-// Widgets
-bool ui_button(UI* ui, const char* label, Vec2 pos, Vec2 size);
-void ui_label(UI* ui, const char* text, Vec2 pos);
-void ui_image(UI* ui, Texture* tex, Vec2 pos, Vec2 size);
-void ui_progress_bar(UI* ui, float value, Vec2 pos, Vec2 size);
-bool ui_tooltip(UI* ui, const char* text);
-```
-
-#### 6. Game UI Screens (~800 LOC)
-
-**File: `src/client/ui/hud.h` + `.c`**
-- Health/mana bars
-- Ability icons with cooldowns
-- Item slots
-- Gold/KDA display
-- Minimap
-- Chat box
-
-**File: `src/client/ui/scoreboard.h` + `.c`**
-- Player stats (K/D/A, CS, gold)
-- Item builds
-- Team gold comparison
-
-**File: `src/client/ui/shop.h` + `.c`**
-- Item grid
-- Search/filter
-- Build path visualization
-- Recommended items
-
-#### 7. Animation System (~400 LOC)
-
-**File: `src/renderer/animation.h` + `.c`**
-```c
-typedef struct Animation Animation;
-typedef struct Animator Animator;
-
-Animation* animation_load(const char* path);
-void animation_destroy(Animation* anim);
-
-Animator* animator_create(void);
-void animator_destroy(Animator* anim);
-void animator_play(Animator* anim, Animation* animation, bool loop);
-void animator_update(Animator* anim, float dt);
-Mat4 animator_get_bone_transform(Animator* anim, const char* bone);
-```
-
-#### 8. Screen Shake & Juice (~150 LOC)
-
-**File: `src/renderer/juice.h` + `.c`**
-```c
-void juice_screen_shake(Camera* cam, float intensity, float duration);
-void juice_hit_pause(float duration);  // brief freeze frame on big hits
-void juice_update(float dt);
+src/arena/ecs/components_3d.h
+src/renderer/mesh.c/h
+src/renderer/gltf_loader.c/h
+src/arena/game/camera_system.c/h
+src/renderer/lighting.c/h
+src/renderer/shaders/mesh.vert
+src/renderer/shaders/mesh.frag
 ```
 
 ### Acceptance Criteria
+- [ ] Load and render a glTF cube at correct position
+- [ ] Isometric camera with proper projection
+- [ ] Single directional light illuminates scene
+- [ ] Depth buffer prevents z-fighting
+- [ ] 60 FPS with 100 static meshes
 
-| Test | Criteria | Method |
-|------|----------|--------|
-| Particles | 1000 particles at 60 FPS | Benchmark |
-| Audio latency | Sound plays < 50ms after event | Measurement |
-| UI responsiveness | Button clicks register immediately | Manual |
-| Visual clarity | Abilities clearly visible in teamfight | Visual |
-| Shop usability | Can buy item in < 3 clicks | Manual |
-
-### Estimated LOC: ~3,350
+### Estimated LOC: ~1,850
 
 ---
 
-## v1.0.0 - "Release"
+## v0.9.0 - "3D Materials & Lighting"
 
-**Goal:** Feature-complete, stable, performant MOBA
-**Duration:** 4-6 weeks
-**Complexity:** Low (stabilization)
+**Goal:** PBR materials and shadow mapping
+**Duration:** 2-3 weeks
+**Complexity:** Medium-High
+**Reference:** [3D_IMPLEMENTATION_PROPOSAL.md](../03-design/3d-rendering/3D_IMPLEMENTATION_PROPOSAL.md)
 
 ### Prerequisites
-- v0.8.0 complete
-- All features implemented
+- v0.8.0 complete (basic 3D pipeline)
 
 ### Deliverables
 
-#### 1. Performance Optimization (~400 LOC changes)
+#### 1. Material System (~300 LOC)
+
+**Files:** `src/renderer/material.c/h`
+- PBR metallic-roughness workflow
+- Base color, metallic, roughness, normal maps
+- Material manager with caching
+
+#### 2. PBR Shader (~250 LOC)
+
+**Files:** `src/renderer/shaders/pbr.vert/frag`
+- Cook-Torrance BRDF
+- Fresnel-Schlick approximation
+- Environment ambient (constant or IBL)
+
+#### 3. Multi-texture Descriptors (~150 LOC)
+
+- Per-material descriptor sets
+- Texture array binding
+- Default textures for missing maps
+
+#### 4. Light Component (~50 LOC)
+
+- Extended light properties
+- Attenuation curves
+- Light culling (sphere test)
+
+#### 5. Lighting System (~200 LOC)
+
+- Multiple point lights
+- Light accumulation in shader
+- Ambient/diffuse/specular separation
+
+#### 6. Directional Shadow Mapping (~300 LOC)
+
+**Files:** `src/renderer/shadow_map.c/h`
+- Shadow map render pass
+- Depth texture binding
+- PCF shadow sampling
+- 2048x2048 resolution
+
+#### 7. Material Manager (~200 LOC)
+
+- Material loading from glTF
+- Hot-reload support
+- Default materials
+
+### Acceptance Criteria
+- [ ] Load glTF models with embedded PBR materials
+- [ ] Directional light (sun) casts shadows
+- [ ] Point lights illuminate scene
+- [ ] Shadow mapping at 2048x2048 resolution
+- [ ] Materials can be hot-reloaded
+
+### Estimated LOC: ~1,450
+
+---
+
+## v0.10.0 - "3D Animation"
+
+**Goal:** Skeletal animation and performance optimization
+**Duration:** 2-3 weeks
+**Complexity:** High
+**Reference:** [3D_IMPLEMENTATION_PROPOSAL.md](../03-design/3d-rendering/3D_IMPLEMENTATION_PROPOSAL.md)
+
+### Prerequisites
+- v0.9.0 complete (PBR materials)
+
+### Deliverables
+
+#### 1. SkinnedMesh Component (~100 LOC)
+
+- Bone hierarchy storage
+- Animation state
+- Blend parameters
+
+#### 2. Bone Hierarchy Loading (~200 LOC)
+
+- Parse glTF skeleton
+- Build bone tree
+- Compute bind poses
+
+#### 3. Animation Clip Loading (~200 LOC)
+
+- Parse glTF animations
+- Keyframe storage
+- Animation registry
+
+#### 4. Animation Blending (~150 LOC)
+
+- SLERP for rotations
+- LERP for positions
+- Cross-fade between clips
+
+#### 5. Animation System (~300 LOC)
+
+**Files:** `src/arena/game/animation_system.c/h`
+- Update bone matrices per frame
+- Animation state machine
+- Event triggers (footsteps, etc.)
+
+#### 6. GPU Skinning Shader (~100 LOC)
+
+**Files:** `src/renderer/shaders/skinned.vert`
+- Bone matrix uniform buffer
+- Vertex skinning (4 bones per vertex)
+
+#### 7. Hardware Instancing (~200 LOC)
+
+**Files:** `src/renderer/instancing.c/h`
+- Instance buffer management
+- Per-instance transforms
+- Minion rendering optimization
+
+#### 8. Frustum Culling (~150 LOC)
+
+**Files:** `src/arena/game/culling_system.c/h`
+- AABB/frustum intersection
+- Per-frame visibility flags
+- Draw call reduction
+
+**New Files:**
+```
+src/arena/game/animation_system.c/h
+src/renderer/shaders/skinned.vert
+src/renderer/instancing.c/h
+src/arena/game/culling_system.c/h
+```
+
+### Acceptance Criteria
+- [ ] Champion model plays idle, walk, attack animations
+- [ ] Smooth animation blending (< 0.3s transitions)
+- [ ] 50+ minions rendered at 60 FPS via instancing
+- [ ] Frustum culling reduces draw calls by > 50%
+
+### Estimated LOC: ~1,400
+
+---
+
+## v1.0.0 - "Release" (Polish Phase)
+
+**Goal:** Production-ready 3D MOBA
+**Duration:** 4-6 weeks
+**Complexity:** Medium (stabilization)
+
+### Prerequisites
+- v0.10.0 complete (3D animation)
+
+### Focus Areas
+- Performance optimization (< 16ms frame time)
+- Visual polish (particles, post-processing)
+- Asset integration (champions, map, VFX)
+- Bug fixes and stability
+
+### Deliverables
+
+#### 1. Performance Optimization (~400 LOC)
 
 - Spatial partitioning for collision (quadtree)
-- Frustum culling
+- Frustum culling optimization
 - Batch rendering optimization
 - Memory pool tuning
 - Network bandwidth optimization
@@ -1182,7 +1297,37 @@ void quadtree_query(Quadtree* qt, AABB region, Entity* out, size_t* count);
 void quadtree_clear(Quadtree* qt);
 ```
 
-#### 2. Bug Fixes & Edge Cases (~500 LOC changes)
+#### 2. Particle System (~500 LOC)
+
+**File: `src/renderer/particles.h` + `.c`**
+- GPU-based particle emission
+- Billboard sprites
+- Color/size over lifetime
+- Velocity fields
+
+#### 3. Audio System (~400 LOC)
+
+**File: `src/audio/audio.h` + `.c`**
+- Spatial audio (3D positioning)
+- Sound effect playback
+- Background music
+- Volume control
+
+#### 4. Post-Processing (Optional) (~300 LOC)
+
+- Screen-space ambient occlusion (SSAO)
+- Bloom effect
+- Tone mapping
+
+#### 5. UI Polish (~600 LOC)
+
+- Health/mana bars (world-space)
+- Ability icons with cooldowns
+- Item slots
+- Gold/KDA display
+- Minimap
+
+#### 6. Bug Fixes & Edge Cases (~500 LOC)
 
 - Reconnection handling
 - Disconnect cleanup
@@ -1190,127 +1335,73 @@ void quadtree_clear(Quadtree* qt);
 - Race condition fixes
 - Input edge cases
 
-#### 3. Cheat Prevention (~300 LOC)
-
-**File: `src/server/anticheat.h` + `.c`**
-```c
-bool anticheat_validate_input(const PlayerInput* input);
-bool anticheat_validate_position(Entity entity, Vec3 claimed_pos);
-void anticheat_flag_player(ClientId client, const char* reason);
-```
-
-#### 4. Matchmaking System (~400 LOC)
+#### 7. Matchmaking System (~400 LOC)
 
 **File: `src/server/matchmaking.h` + `.c`**
-```c
-typedef struct MatchmakingQueue MatchmakingQueue;
 
-MatchmakingQueue* matchmaking_create(void);
-void matchmaking_destroy(MatchmakingQueue* mm);
-void matchmaking_enqueue(MatchmakingQueue* mm, ClientId client, uint32_t mmr);
-bool matchmaking_try_match(MatchmakingQueue* mm, ClientId* team1, ClientId* team2);
-```
-
-#### 5. Replay System (~500 LOC)
+#### 8. Replay System (~500 LOC)
 
 **File: `src/arena/replay/replay.h` + `.c`**
-```c
-typedef struct Replay Replay;
 
-Replay* replay_start_recording(World* world);
-void replay_record_frame(Replay* replay, float time);
-void replay_stop_recording(Replay* replay);
-void replay_save(Replay* replay, const char* path);
-Replay* replay_load(const char* path);
-void replay_seek(Replay* replay, float time);
-void replay_apply_frame(Replay* replay, World* world);
-```
-
-#### 6. Settings & Configuration (~300 LOC)
-
-**File: `src/client/settings.h` + `.c`**
-```c
-typedef struct Settings {
-    int resolution_width;
-    int resolution_height;
-    bool fullscreen;
-    bool vsync;
-    int graphics_quality;      // 0=low, 1=med, 2=high
-    float master_volume;
-    float music_volume;
-    float sfx_volume;
-    KeyBinding bindings[32];
-} Settings;
-
-void settings_load(Settings* settings, const char* path);
-void settings_save(const Settings* settings, const char* path);
-void settings_apply(const Settings* settings);
-```
-
-#### 7. Tutorial System (~400 LOC)
-
-**File: `src/client/tutorial.h` + `.c`**
-```c
-typedef struct Tutorial Tutorial;
-
-Tutorial* tutorial_create(World* world);
-void tutorial_update(Tutorial* tut, float dt);
-void tutorial_render(Tutorial* tut, UI* ui);
-bool tutorial_is_complete(Tutorial* tut);
-void tutorial_skip(Tutorial* tut);
-```
-
-#### 8. Final Integration Testing
-
-- Full 5v5 game playthrough
-- Network stress testing (10+ simultaneous games)
-- Memory profiling (no leaks over 1hr session)
-- Performance profiling (steady 60 FPS)
+### Optional Enhancements
+- [ ] Screen-space ambient occlusion (SSAO)
+- [ ] Bloom post-processing
+- [ ] LOD system for distant objects
 
 ### Acceptance Criteria
 
 | Test | Criteria | Method |
 |------|----------|--------|
 | Performance | 60 FPS in 5v5 teamfight | Benchmark |
+| Frame Time | < 16ms average | Profiling |
 | Memory | < 500MB RAM usage | Profiling |
 | Stability | No crashes in 10 full games | Testing |
 | Network | Handles 100ms latency gracefully | Simulation |
-| Cheating | Server rejects invalid inputs | Unit test |
-| Matchmaking | Match found in < 60s with players | Manual |
 
-### Estimated LOC: ~2,800
+### Estimated LOC: ~3,600
 
 ---
 
 ## Summary
 
-| Version | Codename | Status | Actual LOC | Key Deliverable |
-|---------|----------|--------|------------|-----------------|
+| Version | Codename | Status | Est. LOC | Key Deliverable |
+|---------|----------|--------|----------|-----------------|
 | v0.2.0 | Foundation | ✅ Complete | 2,150 | Vulkan renderer |
 | v0.3.0 | Movement | ✅ Complete | 555 | ECS + player control |
 | v0.4.0 | Combat | ✅ Complete | 880 | Abilities + projectiles |
 | v0.5.0 | Multiplayer | ✅ Complete | 1,000 | UDP client-server |
 | v0.6.0 | Arena Alpha | ✅ Complete | 1,025 | Map, AI, towers |
 | v0.7.0 | Content | ✅ Complete | 755 | Champions + items |
-| v0.8.0 | Polish | ⬜ Planned | ~3,350 | VFX/Audio/UI |
-| v1.0.0 | Release | ⬜ Planned | ~2,800 | Feature complete |
+| v0.8.0 | **3D Foundation** | ⬜ Planned | ~1,850 | **glTF, mesh pipeline** |
+| v0.9.0 | **3D Materials** | ⬜ Planned | ~1,450 | **PBR, shadows** |
+| v0.10.0 | **3D Animation** | ⬜ Planned | ~1,400 | **Skeletal animation** |
+| v1.0.0 | Release | ⬜ Planned | ~3,600 | Polish, performance |
 | **Implemented** | | | **~6,365** | |
-| **Remaining** | | | **~6,150** | |
+| **Remaining (3D)** | | | **~8,300** | |
 
 ### Progress Chart
 
 ```
-v0.2.0 ──► v0.3.0 ──► v0.4.0 ──► v0.5.0 ──► v0.6.0 ──► v0.7.0 ──► v0.8.0 ──► v1.0.0
-  ✅         ✅         ✅         ✅         ✅         ✅         ⬜         ⬜
- 2,150      555        880       1,000     1,025       755        TBD        TBD
+v0.2.0 ──► v0.3.0 ──► v0.4.0 ──► v0.5.0 ──► v0.6.0 ──► v0.7.0 ──► v0.8.0 ──► v0.9.0 ──► v0.10.0 ──► v1.0.0
+  ✅         ✅         ✅         ✅         ✅         ✅         ⬜         ⬜          ⬜          ⬜
+ 2,150      555        880       1,000     1,025       755       1,850     1,450       1,400       3,600
+                                                               ─────────────────────────────────────
+                                                                    3D RENDERING TRANSITION
 ```
 
-### Next Steps (v0.8.0 Polish)
+### Next Steps (v0.8.0 3D Foundation)
 
-1. **Particle System** - Visual effects for abilities and deaths
-2. **UI/HUD** - Health bars, ability icons, gold display
-3. **Jungle Monsters** - Neutral camps with buffs
-4. **Audio** - Sound effects (optional, requires additional libraries)
+1. **cgltf Integration** - Add header-only glTF loader
+2. **Mesh Pipeline** - Create Vulkan pipeline for 3D meshes
+3. **Transform3D Component** - Full 3D position, rotation, scale
+4. **Camera System** - Isometric projection, frustum
+
+### Related Documentation
+
+| Document | Description |
+|----------|-------------|
+| [3D_IMPLEMENTATION_PROPOSAL.md](../03-design/3d-rendering/3D_IMPLEMENTATION_PROPOSAL.md) | Detailed 3D transition plan |
+| [3D_PROPOSAL_EXPANSION.md](../03-design/3d-rendering/3D_PROPOSAL_EXPANSION.md) | Movement, champions, tools research |
 
 ---
 
@@ -1324,26 +1415,40 @@ src/
 │   ├── math/           # Vec3, Mat4, Quat (v0.2.0)
 │   ├── ecs/            # Entity-component system (v0.3.0)
 │   │   ├── components/ # All component types
+│   │   ├── components_3d.h  # NEW: 3D components (v0.8.0)
 │   │   └── systems/    # All systems
 │   ├── physics/        # Collision, quadtree (v0.4.0, v1.0.0)
 │   ├── ai/             # Pathfinding, minion AI (v0.6.0)
 │   ├── network/        # Protocol, sockets (v0.5.0)
 │   ├── world/          # Map, fog of war (v0.6.0)
 │   ├── game/           # Champion, item, economy (v0.7.0)
+│   │   ├── animation_system.c/h  # NEW: Animation (v0.10.0)
+│   │   ├── camera_system.c/h     # NEW: Camera (v0.8.0)
+│   │   └── culling_system.c/h    # NEW: Frustum culling (v0.10.0)
 │   └── replay/         # Recording/playback (v1.0.0)
 ├── renderer/
 │   ├── vk_*/           # Vulkan infrastructure (v0.2.0)
 │   ├── window/         # GLFW window (v0.2.0)
 │   ├── sprite/         # 2D rendering (v0.3.0)
-│   ├── particles/      # Particle system (v0.8.0)
-│   ├── animation/      # Skeletal animation (v0.8.0)
-│   └── ui/             # UI framework (v0.8.0)
-├── audio/              # Audio system (v0.8.0)
+│   ├── mesh.c/h        # NEW: 3D mesh loading (v0.8.0)
+│   ├── gltf_loader.c/h # NEW: glTF import (v0.8.0)
+│   ├── material.c/h    # NEW: PBR materials (v0.9.0)
+│   ├── shadow_map.c/h  # NEW: Shadow mapping (v0.9.0)
+│   ├── instancing.c/h  # NEW: Hardware instancing (v0.10.0)
+│   ├── particles/      # Particle system (v1.0.0)
+│   ├── shaders/
+│   │   ├── quad.vert/frag    # Existing 2D pipeline
+│   │   ├── mesh.vert/frag    # NEW: 3D static mesh (v0.8.0)
+│   │   ├── pbr.vert/frag     # NEW: PBR shading (v0.9.0)
+│   │   ├── skinned.vert      # NEW: Skeletal animation (v0.10.0)
+│   │   └── shadow.vert       # NEW: Shadow pass (v0.9.0)
+│   └── ui/             # UI framework (v1.0.0)
+├── audio/              # Audio system (v1.0.0)
 ├── client/
 │   ├── main.c          # Client entry (exists)
 │   ├── network_client/ # Client networking (v0.5.0)
 │   ├── prediction/     # Client-side prediction (v0.5.0)
-│   ├── ui/             # Game UI screens (v0.8.0)
+│   ├── ui/             # Game UI screens (v1.0.0)
 │   ├── settings/       # Configuration (v1.0.0)
 │   └── tutorial/       # Tutorial (v1.0.0)
 └── server/

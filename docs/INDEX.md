@@ -28,7 +28,7 @@ Core documents defining the project's architecture, roadmap, and technical found
 ### Key Information
 - **Current Version:** v0.7.0
 - **Implemented:** ~6,365 LOC
-- **Remaining:** v0.8.0 (Polish) → v1.0.0 (Release)
+- **3D Transition:** v0.8.0 (Foundation) → v0.9.0 (Materials) → v0.10.0 (Animation) → v1.0.0 (Release)
 
 ---
 
@@ -75,17 +75,26 @@ Technical design documents for implementation.
 
 ### 3.1 3D Rendering
 
-Transition from 2D to full 3D rendering pipeline.
+Transition from 2D to full 3D rendering pipeline. This is the current focus of development.
 
 | Document | Lines | Description |
 |----------|-------|-------------|
 | [3D_IMPLEMENTATION_PROPOSAL.md](03-design/3d-rendering/3D_IMPLEMENTATION_PROPOSAL.md) | ~1,000 | Mesh pipeline, materials, lighting, animation systems |
 | [3D_PROPOSAL_EXPANSION.md](03-design/3d-rendering/3D_PROPOSAL_EXPANSION.md) | ~1,066 | Launcher, map editor, replay system, social features |
 
-**Key Decisions:**
-- Forward rendering (simpler, sufficient for MOBA)
+**3D Transition Phases:**
+| Version | Milestone | Focus |
+|---------|-----------|-------|
+| v0.8.0 | 3D Foundation | glTF loading, mesh pipeline, camera, basic lighting |
+| v0.9.0 | 3D Materials | PBR shading, shadow mapping, multi-texture |
+| v0.10.0 | 3D Animation | Skeletal animation, GPU skinning, instancing |
+| v1.0.0 | Release | Polish, particles, audio, performance |
+
+**Key Architectural Decisions:**
+- Forward rendering (simpler, sufficient for MOBA scene complexity)
 - glTF 2.0 via cgltf (MIT, header-only)
-- Stylized PBR shading
+- Stylized PBR shading (metallic-roughness workflow)
+- Parallel 2D/3D pipelines (3D world + 2D UI overlay)
 
 ### 3.2 User Interface
 
@@ -124,15 +133,21 @@ Development tools and launcher design.
 ## Implementation Timeline
 
 ```
-Phase 1 (Weeks 1-4)     Phase 2 (Weeks 5-8)     Phase 3 (Weeks 9-12)
-├── 3D Foundation       ├── Materials/Lighting   ├── Animation
-├── Camera System       ├── Jinx Champion        ├── Replay System
-└── Mesh Pipeline       └── Map Editor Start     └── Launcher Start
-
-Phase 4 (Weeks 13-16)   Phase 5 (Weeks 17-20)
-├── Map Editor          ├── Polish
-├── Social Features     ├── Testing
-└── UI Implementation   └── Integration
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        3D TRANSITION ROADMAP                                 │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ v0.8.0 (2-3 weeks)    v0.9.0 (2-3 weeks)    v0.10.0 (2-3 weeks)            │
+│ ├── cgltf integration ├── PBR shaders       ├── Skeletal animation         │
+│ ├── Mesh pipeline     ├── Shadow mapping    ├── GPU skinning               │
+│ ├── Transform3D       ├── Material system   ├── Hardware instancing        │
+│ ├── Camera system     └── Multi-texture     └── Frustum culling            │
+│ └── Basic lighting                                                          │
+│                                                                              │
+│ v1.0.0 (4-6 weeks) - Release                                                │
+│ ├── Particle system   ├── UI polish         ├── Performance tuning         │
+│ ├── Audio system      ├── Champion assets   └── Bug fixes                  │
+│ └── Post-processing   └── Map integration                                   │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---

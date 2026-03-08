@@ -1,7 +1,7 @@
 # Arena Engine Architecture Decisions
 
-**Version:** 0.1.0  
-**Last Updated:** 2026-03-08  
+**Version:** 0.8.0
+**Last Updated:** 2026-03-08
 **Target Platform:** Linux (Vulkan)
 
 ---
@@ -34,24 +34,28 @@ arena/platform/  - OS abstraction (NEW)
 ---
 
 ### 1.2 Renderer (`arena-renderer`)
-**Location:** `src/renderer/`  
-**Type:** Static library  
-**Dependencies:** `arena-core`, Vulkan
+**Location:** `src/renderer/`
+**Type:** Static library
+**Dependencies:** `arena-core`, Vulkan, cgltf (3D assets), stb_image (textures)
 
 **Responsibilities:**
 - Vulkan device/instance management
 - Render graph / frame graph
-- Pipeline and shader management
+- Pipeline and shader management (2D quad + 3D mesh pipelines)
 - GPU resource management (buffers, images, samplers)
 - Draw command submission
 - Debug rendering (lines, shapes, text)
+- **3D mesh rendering (glTF 2.0 models)**
+- **Skeletal animation and skinning**
+- **PBR material system**
+- **Shadow mapping**
 
 **Does NOT handle:**
 - Window creation (client's responsibility)
 - Input handling
 - Game state
 
-**Rationale:** Separating renderer from windowing allows headless rendering for tools and testing.
+**Rationale:** Separating renderer from windowing allows headless rendering for tools and testing. The 3D pipeline coexists with the 2D quad pipeline for UI rendering.
 
 ---
 
@@ -503,12 +507,89 @@ Add `CMakePresets.json` for standardized configurations:
 
 ---
 
-## 7. KEY DECISIONS SUMMARY
+## 7. 3D RENDERING ARCHITECTURE
+
+### 7.1 Rendering Strategy
+
+**Decision: Forward Rendering with Parallel 2D/3D Pipelines**
+
+| Approach | Pros | Cons |
+|----------|------|------|
+| Forward | Simple, MSAA-friendly, transparent-friendly | More light passes |
+| Deferred | Efficient many-lights | Complex, G-buffer overhead, MSAA issues |
+
+**Rationale:** MOBA arenas have limited light sources (sun + ~10 point lights). Forward rendering with light culling is sufficient and simpler to implement.
+
+### 7.2 Render Frame Pipeline
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    RENDER FRAME                              │
+├─────────────────────────────────────────────────────────────┤
+│ Pass 1: Shadow Map (depth-only, light POV)                   │
+│ Pass 2: Opaque 3D (depth test on, depth write on)           │
+│ Pass 3: Transparent 3D (depth test on, depth write off)     │
+│ Pass 4: 2D UI Overlay (depth test off, existing quad pipe)  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 7.3 Asset Format
+
+**Decision: glTF 2.0 via cgltf**
+
+| Format | Pros | Cons |
+|--------|------|------|
+| glTF 2.0 | Industry standard, PBR support, animation, binary variant | - |
+| FBX | Autodesk standard | Proprietary, complex parser |
+| OBJ | Simple | No animation, no materials |
+
+**Library:** cgltf (single-header, MIT license, ~3K LOC)
+
+### 7.4 Shading Model
+
+**Decision: Stylized PBR (Metallic-Roughness Workflow)**
+
+- Physically-based lighting with artistic controls
+- Metallic-roughness texture workflow (glTF compatible)
+- Environment IBL optional (future enhancement)
+
+### 7.5 New 3D Components
+
+| Component | Purpose | Key Fields |
+|-----------|---------|------------|
+| Transform3D | Full 3D position, rotation, scale | position, rotation (quat), scale, world_matrix |
+| MeshRenderer | Static mesh rendering | mesh_id, material_id, bounds, cast_shadows |
+| Camera | View frustum definition | projection, fov, frustum_planes |
+| Light | Scene illumination | type, color, intensity, range, cast_shadows |
+| SkinnedMesh | Animated characters | skeleton_id, bone_matrices, anim_state |
+
+### 7.6 Animation Pipeline
+
+- Skeletal animation with bone hierarchies (max 64 bones)
+- Animation blending for smooth transitions (slerp)
+- GPU skinning shader for performance
+- Support for glTF animations
+
+### 7.7 3D Dependencies
+
+| Library | Version | License | Purpose |
+|---------|---------|---------|---------|
+| cgltf | 1.13+ | MIT | glTF 2.0 loading |
+| stb_image | 2.28+ | MIT | Texture loading (extended for PBR) |
+| Recast/Detour | 1.6+ | zlib | NavMesh (optional) |
+
+---
+
+## 8. KEY DECISIONS SUMMARY
 
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
 | Language | C11 | Maximum control, minimal runtime |
 | Renderer | Vulkan | Modern, explicit, Linux-native |
+| **Rendering Mode** | **Forward** | **Simpler, sufficient for MOBA scene complexity** |
+| **Asset Format** | **glTF 2.0** | **Industry standard, free tools, PBR + animation** |
+| **Shading** | **Stylized PBR** | **Visual quality with artistic control** |
+| **3D Library** | **cgltf** | **Header-only, MIT, minimal footprint** |
 | Threading | Main + Render + (Network) | Simple, avoids sync bugs |
 | Memory | Arena allocators | Predictable, cache-friendly |
 | ECS | Custom sparse-set based | MOBA needs fast iteration |
@@ -517,14 +598,20 @@ Add `CMakePresets.json` for standardized configurations:
 
 ---
 
-## 8. FILE STRUCTURE (Target)
+## 9. FILE STRUCTURE (Target)
 
 ```
 arena-engine/
 ├── CMakeLists.txt
 ├── CMakePresets.json
 ├── docs/
-│   └── ARCHITECTURE_DECISIONS.md
+│   ├── 01-project-overview/
+│   ├── 02-research/
+│   └── 03-design/
+│       └── 3d-rendering/         # 3D implementation docs
+├── libs/
+│   ├── cgltf/                    # glTF loader (header-only)
+│   └── stb/                      # stb_image for textures
 ├── src/
 │   ├── arena/                    # arena-core library
 │   │   ├── alloc/
@@ -547,7 +634,11 @@ arena-engine/
 │   │   │   ├── entity.c/h
 │   │   │   ├── component.c/h
 │   │   │   ├── system.c/h
+│   │   │   ├── components_3d.h   # NEW: 3D components
 │   │   │   └── world.c/h
+│   │   ├── game/
+│   │   │   ├── animation_system.c/h  # NEW: Animation
+│   │   │   └── culling_system.c/h    # NEW: Frustum culling
 │   │   ├── platform/
 │   │   │   ├── platform.h
 │   │   │   ├── time.c/h
@@ -561,6 +652,16 @@ arena-engine/
 │   │   ├── vk_buffer.c/h
 │   │   ├── vk_image.c/h
 │   │   ├── render_world.c/h
+│   │   ├── mesh.c/h              # NEW: 3D mesh loading
+│   │   ├── material.c/h          # NEW: PBR materials
+│   │   ├── gltf_loader.c/h       # NEW: glTF import
+│   │   ├── instancing.c/h        # NEW: Hardware instancing
+│   │   ├── shadow_map.c/h        # NEW: Shadow mapping
+│   │   ├── shaders/
+│   │   │   ├── quad.vert/frag    # Existing 2D pipeline
+│   │   │   ├── mesh.vert/frag    # NEW: 3D static mesh
+│   │   │   ├── skinned.vert      # NEW: Skeletal animation
+│   │   │   └── shadow.vert       # NEW: Shadow pass
 │   │   └── renderer.h
 │   ├── network/                  # arena-network library
 │   │   ├── socket.c/h
@@ -580,10 +681,21 @@ arena-engine/
 │   └── server/
 │       └── main.c
 └── tools/
-    ├── arena-editor/
+    ├── arena-editor/             # 3D Map Editor (future)
     ├── asset-packer/
     └── entity-editor/
 ```
+
+---
+
+## 10. RELATED DOCUMENTS
+
+| Document | Description |
+|----------|-------------|
+| [3D_IMPLEMENTATION_PROPOSAL.md](../03-design/3d-rendering/3D_IMPLEMENTATION_PROPOSAL.md) | Detailed 3D transition plan |
+| [3D_PROPOSAL_EXPANSION.md](../03-design/3d-rendering/3D_PROPOSAL_EXPANSION.md) | Movement, champions, tools research |
+| [MILESTONES.md](MILESTONES.md) | Development roadmap with 3D milestones |
+| [TECHNICAL_SPEC.md](TECHNICAL_SPEC.md) | ECS, network, renderer specifications |
 
 ---
 

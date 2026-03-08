@@ -1,7 +1,7 @@
 # Arena Engine - Technical Specifications
 
-**Version:** 0.1.0  
-**Last Updated:** 2026-03-08  
+**Version:** 0.8.0
+**Last Updated:** 2026-03-08
 **Target:** C11, Vulkan 1.3, Linux/Windows
 
 ---
@@ -9,8 +9,13 @@
 ## Table of Contents
 
 1. [ECS Architecture](#1-ecs-architecture)
+   - 1.7 [3D Components (v0.8.0+)](#17-3d-components-v080)
 2. [Network Protocol](#2-network-protocol)
 3. [Renderer Pipeline](#3-renderer-pipeline)
+   - 3.5 [3D Render Pass Organization (v0.8.0+)](#35-render-pass-organization-3d---v080)
+   - 3.6 [3D Mesh Structures (v0.8.0+)](#36-3d-mesh-structures-v080)
+   - 3.7 [PBR Material System (v0.8.0+)](#37-pbr-material-system-v080)
+   - 3.8 [glTF Loader (v0.8.0+)](#38-gltf-loader-v080)
 4. [Asset Formats](#4-asset-formats)
 5. [Game State Structure](#5-game-state-structure)
 
@@ -251,7 +256,98 @@ DECLARE_COMPONENT(AIController, AIController)
 DECLARE_COMPONENT(NetworkIdentity, NetworkIdentity)
 ```
 
-### 1.7 System Interface
+### 1.7 3D Components (v0.8.0+)
+
+```c
+// src/arena/ecs/components_3d.h
+
+// Full 3D transform replacing 2D Transform for 3D entities
+typedef struct Transform3D {
+    Vec3 position;           // World position
+    Quat rotation;           // Quaternion rotation
+    Vec3 scale;              // Non-uniform scale
+    Mat4 local_matrix;       // Cached T * R * S
+    Mat4 world_matrix;       // Parent chain applied
+    bool dirty;              // Needs recalculation
+} Transform3D;
+
+// Static 3D mesh rendering
+typedef struct MeshRenderer {
+    uint32_t mesh_id;        // Handle to GPU mesh
+    uint32_t material_id;    // Handle to PBR material
+    Vec3 bounds_min;         // AABB for culling
+    Vec3 bounds_max;
+    float bounds_radius;     // Bounding sphere
+    uint8_t layer;           // Render layer (opaque, transparent)
+    bool cast_shadows;
+    bool receive_shadows;
+    bool visible;
+} MeshRenderer;
+
+// Scene camera
+typedef enum CameraProjection {
+    CAMERA_PERSPECTIVE,
+    CAMERA_ORTHOGRAPHIC
+} CameraProjection;
+
+typedef struct Camera {
+    CameraProjection projection;
+    float fov;               // Vertical FOV (radians)
+    float near_plane;
+    float far_plane;
+    float ortho_size;        // Half-height for orthographic
+    Mat4 view_matrix;
+    Mat4 projection_matrix;
+    Mat4 view_projection;
+    Vec4 frustum_planes[6];  // For culling
+    bool is_active;
+    uint8_t priority;
+} Camera;
+
+// Scene lighting
+typedef enum LightType {
+    LIGHT_DIRECTIONAL,       // Sun/moon
+    LIGHT_POINT,             // Torches, explosions
+    LIGHT_SPOT               // Focused beams
+} LightType;
+
+typedef struct Light {
+    LightType type;
+    Vec3 color;              // RGB, HDR allowed
+    float intensity;
+    float range;             // Point/spot only
+    float attenuation;
+    float inner_cone;        // Spot only
+    float outer_cone;
+    bool cast_shadows;
+    uint32_t shadow_map_id;
+} Light;
+
+// Skeletal animation
+#define MAX_BONES_PER_MESH 64
+
+typedef struct SkinnedMesh {
+    uint32_t skeleton_id;    // Skeleton asset handle
+    Mat4 bone_matrices[MAX_BONES_PER_MESH];
+    uint32_t bone_count;
+    uint32_t current_anim_id;
+    float anim_time;
+    float anim_speed;
+    bool anim_looping;
+    uint32_t blend_from_anim;
+    float blend_factor;      // 0 = from, 1 = current
+    float blend_duration;
+} SkinnedMesh;
+
+// Component type IDs (3D - registered at startup)
+DECLARE_COMPONENT(Transform3D, Transform3D)
+DECLARE_COMPONENT(MeshRenderer, MeshRenderer)
+DECLARE_COMPONENT(Camera, Camera)
+DECLARE_COMPONENT(Light, Light)
+DECLARE_COMPONENT(SkinnedMesh, SkinnedMesh)
+```
+
+### 1.8 System Interface
 
 Systems are functions with declared component dependencies, executed in deterministic order.
 
@@ -772,10 +868,10 @@ void sprite_renderer_submit(SpriteRenderer* sr, const SpriteInstance* sprite);
 void sprite_renderer_flush(SpriteRenderer* sr, FrameData* frame, Renderer* r);
 ```
 
-### 3.4 Render Pass Organization
+### 3.4 Render Pass Organization (2D Legacy)
 
 ```
-Main Pass:
+Main Pass (2D):
 ├── Terrain Layer (ground textures, tiled)
 ├── Floor Decals (ability effects, blood)
 ├── Entities Layer (sorted by Y, back-to-front)
@@ -790,6 +886,119 @@ UI Pass:
 ├── HUD (ability bar, minimap, stats)
 ├── Menus
 └── Debug Overlay
+```
+
+### 3.5 Render Pass Organization (3D - v0.8.0+)
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    3D RENDER FRAME                           │
+├─────────────────────────────────────────────────────────────┤
+│ Pass 1: Shadow Map Pass                                      │
+│   └── Depth-only render from directional light POV          │
+│                                                              │
+│ Pass 2: Opaque Pass                                          │
+│   ├── 3D Terrain mesh                                        │
+│   ├── Static props (depth test on, depth write on)          │
+│   └── Characters (skinned meshes)                           │
+│                                                              │
+│ Pass 3: Transparent Pass                                     │
+│   ├── VFX/Particles (depth test on, depth write off)        │
+│   └── Transparent meshes (sorted back-to-front)             │
+│                                                              │
+│ Pass 4: UI Overlay Pass                                      │
+│   ├── Health bars (world-space, billboarded)                │
+│   └── 2D HUD (existing quad pipeline, depth test off)       │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 3.6 3D Mesh Structures (v0.8.0+)
+
+```c
+// src/renderer/mesh.h
+
+typedef struct Vertex3D {
+    float position[3];
+    float normal[3];
+    float tangent[4];    // xyz + handedness
+    float uv[2];
+    uint8_t bone_ids[4];    // For skinned meshes
+    float bone_weights[4];
+} Vertex3D;
+
+typedef struct Mesh {
+    VkBuffer        vertex_buffer;
+    VkBuffer        index_buffer;
+    VkDeviceMemory  memory;
+    uint32_t        vertex_count;
+    uint32_t        index_count;
+    Vec3            bounds_min;
+    Vec3            bounds_max;
+    float           bounds_radius;
+} Mesh;
+
+typedef struct MeshManager {
+    Mesh*           meshes;
+    uint32_t        mesh_count;
+    uint32_t        mesh_capacity;
+    uint32_t*       free_list;
+    uint32_t        free_count;
+} MeshManager;
+
+MeshHandle mesh_load_gltf(MeshManager* mm, Renderer* r, const char* path);
+void       mesh_unload(MeshManager* mm, MeshHandle handle);
+```
+
+### 3.7 PBR Material System (v0.8.0+)
+
+```c
+// src/renderer/material.h
+
+typedef struct Material {
+    Vec4    base_color;          // RGB + alpha
+    float   metallic;
+    float   roughness;
+    float   normal_scale;
+    float   ao_strength;
+
+    uint32_t albedo_texture;     // Texture handles
+    uint32_t normal_texture;
+    uint32_t metallic_roughness_texture;
+    uint32_t ao_texture;
+    uint32_t emissive_texture;
+
+    Vec3    emissive_color;
+    float   emissive_strength;
+
+    bool    double_sided;
+    uint8_t alpha_mode;          // OPAQUE, MASK, BLEND
+    float   alpha_cutoff;
+} Material;
+
+typedef struct MaterialManager {
+    Material*       materials;
+    uint32_t        material_count;
+    VkDescriptorSet descriptor_sets[256]; // Per-material descriptors
+} MaterialManager;
+```
+
+### 3.8 glTF Loader (v0.8.0+)
+
+```c
+// src/renderer/gltf_loader.h
+
+typedef struct GLTFScene {
+    Mesh*       meshes;
+    uint32_t    mesh_count;
+    Material*   materials;
+    uint32_t    material_count;
+    Skeleton*   skeleton;        // Optional
+    Animation*  animations;
+    uint32_t    animation_count;
+} GLTFScene;
+
+GLTFScene* gltf_load(const char* path, Arena* arena);
+void       gltf_free(GLTFScene* scene);
 ```
 
 ### 3.5 Shader Interface
