@@ -221,24 +221,30 @@ static bool init_scene(void) {
 
     scene.cube_count = 5;
 
-    // Create colored materials for each cube
+    // Load test texture from file
+    TextureHandle test_texture = texture_load(&scene.texture_manager, "../assets/textures/test_logo.png");
+    if (test_texture == TEXTURE_HANDLE_INVALID) {
+        test_texture = texture_load(&scene.texture_manager, "assets/textures/test_logo.png");
+    }
+    bool has_texture = (test_texture != TEXTURE_HANDLE_INVALID);
+    printf("Test texture: %s (handle: %u)\n", has_texture ? "loaded" : "not found", test_texture);
+
+    // Create materials - middle cube gets the loaded texture, others get colors
     Vec4 colors[] = {
         vec4(1.0f, 0.2f, 0.2f, 1.0f),  // Red
         vec4(0.2f, 1.0f, 0.2f, 1.0f),  // Green
-        vec4(0.2f, 0.4f, 1.0f, 1.0f),  // Blue
+        vec4(1.0f, 1.0f, 1.0f, 1.0f),  // White (textured)
         vec4(1.0f, 1.0f, 0.2f, 1.0f),  // Yellow
         vec4(1.0f, 0.5f, 0.0f, 1.0f),  // Orange
     };
 
     for (int i = 0; i < scene.cube_count; i++) {
-        // Create material with unique color
+        // Middle cube (i==2) gets the loaded texture
+        TextureHandle tex = (i == 2 && has_texture) ? test_texture : texture_get_white(&scene.texture_manager);
         scene.cube_materials[i] = material_create_pbr(&scene.material_manager, colors[i],
-            0.0f + (i * 0.2f),   // Increasing metallic
-            0.3f + (i * 0.1f),   // Increasing roughness
-            texture_get_white(&scene.texture_manager));
+            0.0f + (i * 0.2f), 0.3f + (i * 0.1f), tex);
 
         scene.cube_entities[i] = world_spawn(scene.world);
-
         Transform3D* t = world_add_transform3d(scene.world, scene.cube_entities[i]);
         transform3d_init(t);
         t->position = vec3((i - 2) * 3.0f, 0.5f, 0);
@@ -247,11 +253,11 @@ static bool init_scene(void) {
         MeshRenderer* mr = world_add_mesh_renderer(scene.world, scene.cube_entities[i]);
         mesh_renderer_init(mr);
         mr->mesh_id = scene.cube_mesh;
-        mr->material_id = scene.cube_materials[i];  // Use unique colored material
+        mr->material_id = scene.cube_materials[i];
         mr->cast_shadows = true;
     }
 
-    printf("Created %d cube entities with colored materials\n", scene.cube_count);
+    printf("Created %d cube entities (%s textured)\n", scene.cube_count, has_texture ? "center" : "none");
 
     // =========================================================================
     // Test glTF Loading
