@@ -316,15 +316,16 @@ static bool create_descriptor_layouts(Render3D* r3d) {
         return false;
     }
 
-    // Set 1: Texture sampler
-    VkDescriptorSetLayoutBinding tex_binding = {
-        .binding = 0,
-        .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-        .descriptorCount = 1,
-        .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
+    // Set 1: Texture samplers (albedo + normal map)
+    VkDescriptorSetLayoutBinding tex_bindings[] = {
+        {.binding = 0, .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+         .descriptorCount = 1, .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT},  // albedo
+        {.binding = 1, .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+         .descriptorCount = 1, .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT}   // normal
     };
 
-    layout_info.pBindings = &tex_binding;
+    layout_info.bindingCount = 2;
+    layout_info.pBindings = tex_bindings;
     if (vkCreateDescriptorSetLayout(r3d->device, &layout_info, NULL, &r3d->texture_set_layout) != VK_SUCCESS) {
         return false;
     }
@@ -335,12 +336,12 @@ static bool create_descriptor_layouts(Render3D* r3d) {
 static bool create_descriptor_pool(Render3D* r3d) {
     VkDescriptorPoolSize pool_sizes[] = {
         { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 3 },
-        { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 4 }  // 3 per-frame + 1 default
+        { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 8 }  // 2 per texture set (albedo+normal)
     };
 
     VkDescriptorPoolCreateInfo pool_info = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-        .maxSets = 7,  // 3 UBO sets + 3 texture sets + 1 default texture
+        .maxSets = 8,  // 3 UBO sets + extra for texture sets
         .poolSizeCount = 2,
         .pPoolSizes = pool_sizes
     };
@@ -399,22 +400,21 @@ static bool create_descriptor_pool(Render3D* r3d) {
         return false;
     }
 
-    VkDescriptorImageInfo image_info = {
-        .sampler = r3d->default_sampler,
-        .imageView = r3d->default_texture_view,
-        .imageLayout = VK_IMAGE_LAYOUT_GENERAL
+    // Write both albedo (binding 0) and normal (binding 1) - both use default white texture
+    // Normal map default is flat (128,128,255) but white works as fallback
+    VkDescriptorImageInfo image_infos[2] = {
+        {r3d->default_sampler, r3d->default_texture_view, VK_IMAGE_LAYOUT_GENERAL},
+        {r3d->default_sampler, r3d->default_texture_view, VK_IMAGE_LAYOUT_GENERAL}
     };
 
-    VkWriteDescriptorSet tex_write = {
-        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-        .dstSet = r3d->default_texture_set,
-        .dstBinding = 0,
-        .descriptorCount = 1,
-        .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-        .pImageInfo = &image_info
+    VkWriteDescriptorSet tex_writes[2] = {
+        {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, NULL, r3d->default_texture_set, 0, 0, 1,
+         VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, &image_infos[0], NULL, NULL},
+        {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, NULL, r3d->default_texture_set, 1, 0, 1,
+         VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, &image_infos[1], NULL, NULL}
     };
 
-    vkUpdateDescriptorSets(r3d->device, 1, &tex_write, 0, NULL);
+    vkUpdateDescriptorSets(r3d->device, 2, tex_writes, 0, NULL);
 
     return true;
 }

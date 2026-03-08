@@ -95,9 +95,16 @@ static bool create_tex(TextureManager* tm, Texture* tex, const uint8_t* pixels, 
 
     VkDescriptorSetAllocateInfo ds_alloc = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO, NULL, tm->descriptor_pool, 1, &tm->set_layout};
     vkAllocateDescriptorSets(tm->device, &ds_alloc, &tex->descriptor_set);
-    VkDescriptorImageInfo img_desc = {tex->sampler, tex->view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
-    VkWriteDescriptorSet write = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, NULL, tex->descriptor_set, 0, 0, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, &img_desc, NULL, NULL};
-    vkUpdateDescriptorSets(tm->device, 1, &write, 0, NULL);
+    // Write albedo (binding 0) - this texture; normal (binding 1) - use flat normal default
+    VkDescriptorImageInfo img_descs[2] = {
+        {tex->sampler, tex->view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
+        {tex->sampler, tex->view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL}  // Will be updated with normal texture
+    };
+    VkWriteDescriptorSet writes[2] = {
+        {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, NULL, tex->descriptor_set, 0, 0, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, &img_descs[0], NULL, NULL},
+        {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, NULL, tex->descriptor_set, 1, 0, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, &img_descs[1], NULL, NULL}
+    };
+    vkUpdateDescriptorSets(tm->device, 2, writes, 0, NULL);
     tex->width = w; tex->height = h; tex->mip_levels = 1; tex->is_valid = true;
     return true;
 }
@@ -105,10 +112,14 @@ static bool create_tex(TextureManager* tm, Texture* tex, const uint8_t* pixels, 
 bool texture_manager_init(TextureManager* tm, VkDevice device, VkPhysicalDevice pd, VkCommandPool pool, VkQueue queue) {
     memset(tm, 0, sizeof(TextureManager));
     tm->device = device; tm->physical_device = pd; tm->command_pool = pool; tm->graphics_queue = queue;
-    VkDescriptorSetLayoutBinding bind = {0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, NULL};
-    VkDescriptorSetLayoutCreateInfo layout = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO, NULL, 0, 1, &bind};
+    // 2 bindings: albedo (0) + normal (1)
+    VkDescriptorSetLayoutBinding binds[2] = {
+        {0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, NULL},
+        {1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, NULL}
+    };
+    VkDescriptorSetLayoutCreateInfo layout = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO, NULL, 0, 2, binds};
     if (vkCreateDescriptorSetLayout(device, &layout, NULL, &tm->set_layout) != VK_SUCCESS) return false;
-    VkDescriptorPoolSize ps = {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, MAX_TEXTURES};
+    VkDescriptorPoolSize ps = {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, MAX_TEXTURES * 2};  // 2 per set
     VkDescriptorPoolCreateInfo pool_info = {VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO, NULL, 0, MAX_TEXTURES, 1, &ps};
     if (vkCreateDescriptorPool(device, &pool_info, NULL, &tm->descriptor_pool) != VK_SUCCESS) return false;
     uint8_t white[] = {255,255,255,255}, black[] = {0,0,0,255}, norm[] = {128,128,255,255};
@@ -152,3 +163,13 @@ TextureHandle texture_get_white(TextureManager* tm) { return tm->white_texture; 
 TextureHandle texture_get_black(TextureManager* tm) { return tm->black_texture; }
 TextureHandle texture_get_normal(TextureManager* tm) { return tm->normal_texture; }
 
+void texture_set_normal_map(TextureManager* tm, TextureHandle albedo_h, TextureHandle normal_h) {
+    Texture* albedo = texture_get(tm, albedo_h);
+    Texture* normal = texture_get(tm, normal_h);
+    if (!albedo || !normal || !albedo->is_valid || !normal->is_valid) return;
+
+    VkDescriptorImageInfo img_desc = {normal->sampler, normal->view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+    VkWriteDescriptorSet write = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, NULL, albedo->descriptor_set,
+        1, 0, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, &img_desc, NULL, NULL};
+    vkUpdateDescriptorSets(tm->device, 1, &write, 0, NULL);
+}

@@ -221,26 +221,34 @@ static bool init_scene(void) {
 
     scene.cube_count = 5;
 
-    // Load test texture from file
-    TextureHandle test_texture = texture_load(&scene.texture_manager, "../assets/textures/test_logo.png");
-    if (test_texture == TEXTURE_HANDLE_INVALID) {
-        test_texture = texture_load(&scene.texture_manager, "assets/textures/test_logo.png");
-    }
-    bool has_texture = (test_texture != TEXTURE_HANDLE_INVALID);
-    printf("Test texture: %s (handle: %u)\n", has_texture ? "loaded" : "not found", test_texture);
+    // Load diffuse and normal map textures
+    TextureHandle diffuse_tex = texture_load(&scene.texture_manager, "../assets/textures/brick_diffuse.png");
+    if (diffuse_tex == TEXTURE_HANDLE_INVALID)
+        diffuse_tex = texture_load(&scene.texture_manager, "assets/textures/brick_diffuse.png");
 
-    // Create materials - middle cube gets the loaded texture, others get colors
+    TextureHandle normal_tex = texture_load(&scene.texture_manager, "../assets/textures/brick_normal.png");
+    if (normal_tex == TEXTURE_HANDLE_INVALID)
+        normal_tex = texture_load(&scene.texture_manager, "assets/textures/brick_normal.png");
+
+    bool has_normal_map = (diffuse_tex != TEXTURE_HANDLE_INVALID && normal_tex != TEXTURE_HANDLE_INVALID);
+    if (has_normal_map) {
+        // Link normal map to diffuse texture's descriptor set
+        texture_set_normal_map(&scene.texture_manager, diffuse_tex, normal_tex);
+        printf("Normal mapping enabled (diffuse: %u, normal: %u)\n", diffuse_tex, normal_tex);
+    }
+
+    // Create materials - middle cube gets normal-mapped texture
     Vec4 colors[] = {
         vec4(1.0f, 0.2f, 0.2f, 1.0f),  // Red
         vec4(0.2f, 1.0f, 0.2f, 1.0f),  // Green
-        vec4(1.0f, 1.0f, 1.0f, 1.0f),  // White (textured)
+        vec4(1.0f, 1.0f, 1.0f, 1.0f),  // White (normal mapped)
         vec4(1.0f, 1.0f, 0.2f, 1.0f),  // Yellow
         vec4(1.0f, 0.5f, 0.0f, 1.0f),  // Orange
     };
 
     for (int i = 0; i < scene.cube_count; i++) {
-        // Middle cube (i==2) gets the loaded texture
-        TextureHandle tex = (i == 2 && has_texture) ? test_texture : texture_get_white(&scene.texture_manager);
+        // Middle cube (i==2) gets normal-mapped texture
+        TextureHandle tex = (i == 2 && has_normal_map) ? diffuse_tex : texture_get_white(&scene.texture_manager);
         scene.cube_materials[i] = material_create_pbr(&scene.material_manager, colors[i],
             0.0f + (i * 0.2f), 0.3f + (i * 0.1f), tex);
 
@@ -257,7 +265,7 @@ static bool init_scene(void) {
         mr->cast_shadows = true;
     }
 
-    printf("Created %d cube entities (%s textured)\n", scene.cube_count, has_texture ? "center" : "none");
+    printf("Created %d cube entities (%s)\n", scene.cube_count, has_normal_map ? "center normal-mapped" : "no normal maps");
 
     // =========================================================================
     // Test glTF Loading

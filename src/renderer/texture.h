@@ -80,5 +80,8 @@ TextureHandle texture_get_white(TextureManager* tm);
 TextureHandle texture_get_black(TextureManager* tm);
 TextureHandle texture_get_normal(TextureManager* tm);
 
+// Update normal map binding for a texture's descriptor set
+void texture_set_normal_map(TextureManager* tm, TextureHandle albedo, TextureHandle normal);
+
 #endif // TEXTURE_H
 

@@ -32,16 +32,27 @@ layout(set = 0, binding = 0) uniform CombinedUBO {
     vec4 cameraPosition;  // xyz = camera world position
 } ubo;
 
-// Texture samplers (optional - binding 3, 4, 5)
+// Texture samplers
 layout(set = 1, binding = 0) uniform sampler2D albedoMap;
-// layout(set = 1, binding = 1) uniform sampler2D normalMap;  // TODO: Add later
-// layout(set = 1, binding = 2) uniform sampler2D metallicRoughnessMap;  // TODO
+layout(set = 1, binding = 1) uniform sampler2D normalMap;
 
 // Output
 layout(location = 0) out vec4 outColor;
 
 // Constants
 const float PI = 3.14159265359;
+
+// Get normal from normal map using TBN matrix
+vec3 getNormalFromMap() {
+    vec3 tangentNormal = texture(normalMap, fragUV).rgb * 2.0 - 1.0;
+
+    vec3 T = normalize(fragTangent);
+    vec3 B = normalize(fragBitangent);
+    vec3 N = normalize(fragNormal);
+    mat3 TBN = mat3(T, B, N);
+
+    return normalize(TBN * tangentNormal);
+}
 
 void main() {
     // Sample albedo texture or use material base color
@@ -52,8 +63,8 @@ void main() {
         discard;
     }
 
-    // Normalize interpolated normal
-    vec3 N = normalize(fragNormal);
+    // Get normal (from normal map or vertex normal)
+    vec3 N = getNormalFromMap();
 
     // Light direction (pointing towards light)
     vec3 L = normalize(-ubo.lightDirection.xyz);
