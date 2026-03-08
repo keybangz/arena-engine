@@ -701,7 +701,9 @@ bool render3d_init(Render3D* r3d,
                    VkCommandPool command_pool,
                    VkQueue graphics_queue,
                    uint32_t width, uint32_t height,
-                   MeshManager* mesh_manager) {
+                   MeshManager* mesh_manager,
+                   TextureManager* texture_manager,
+                   MaterialManager* material_manager) {
     memset(r3d, 0, sizeof(Render3D));
 
     r3d->device = device;
@@ -710,6 +712,8 @@ bool render3d_init(Render3D* r3d,
     r3d->command_pool = command_pool;
     r3d->graphics_queue = graphics_queue;
     r3d->mesh_manager = mesh_manager;
+    r3d->texture_manager = texture_manager;
+    r3d->material_manager = material_manager;
 
     // Create depth buffer
     if (!create_depth_buffer(r3d, width, height)) {
@@ -854,16 +858,21 @@ void render3d_end_frame(Render3D* r3d, VkCommandBuffer cmd, uint32_t frame_index
         ubo.model = draw->transform;
         ubo.view = r3d->view_matrix;
         ubo.projection = r3d->projection_matrix;
+        ubo.normalMatrix = draw->transform;  // OK for uniform scale
 
-        // Calculate normal matrix (transpose of inverse of model matrix)
-        // For uniform scaling, we can just use the model matrix
-        ubo.normalMatrix = draw->transform;
-
-        // Material (use defaults for now)
-        ubo.baseColor = vec4(0.8f, 0.8f, 0.8f, 1.0f);
-        ubo.metallic = 0.0f;
-        ubo.roughness = 0.5f;
-        ubo.ambientOcclusion = 1.0f;
+        // Get material properties
+        Material* mat = r3d->material_manager ? material_get(r3d->material_manager, draw->material_id) : NULL;
+        if (mat && mat->is_valid) {
+            ubo.baseColor = mat->base_color;
+            ubo.metallic = mat->metallic;
+            ubo.roughness = mat->roughness;
+            ubo.ambientOcclusion = mat->ambient_occlusion;
+        } else {
+            ubo.baseColor = vec4(0.8f, 0.8f, 0.8f, 1.0f);
+            ubo.metallic = 0.0f;
+            ubo.roughness = 0.5f;
+            ubo.ambientOcclusion = 1.0f;
+        }
         ubo.padding1 = 0.0f;
 
         // Lighting
@@ -877,10 +886,22 @@ void render3d_end_frame(Render3D* r3d, VkCommandBuffer cmd, uint32_t frame_index
         // Copy UBO data (use frame_index for triple buffering)
         memcpy(r3d->ubo_mapped[frame_index % 3], &ubo, sizeof(CombinedUBO));
 
-        // Bind UBO descriptor set (set 0) with dynamic offset
+        // Bind UBO descriptor set (set 0)
         uint32_t dynamic_offset = 0;
         vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r3d->pipeline_layout,
                                0, 1, &r3d->descriptor_sets[frame_index % 3], 1, &dynamic_offset);
+
+        // Bind texture (set 1) from material
+        if (mat && mat->is_valid && r3d->texture_manager) {
+            Texture* tex = texture_get(r3d->texture_manager, mat->albedo_texture);
+            if (tex && tex->is_valid) {
+                vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r3d->pipeline_layout,
+                                       1, 1, &tex->descriptor_set, 0, NULL);
+            } else {
+                vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r3d->pipeline_layout,
+                                       1, 1, &r3d->default_texture_set, 0, NULL);
+            }
+        }
 
         // Get mesh data and bind buffers
         Mesh* mesh = mesh_get(r3d->mesh_manager, draw->mesh);

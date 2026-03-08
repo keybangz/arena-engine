@@ -5,6 +5,8 @@
 #include <stdbool.h>
 #include "../arena/math/math.h"
 #include "mesh.h"
+#include "texture.h"
+#include "material.h"
 
 // ============================================================================
 // 3D Rendering Pipeline for Arena Engine
@@ -89,9 +91,11 @@ typedef struct Render3D {
     VkSampler default_sampler;
     VkImageLayout default_texture_layout;
 
-    // Mesh manager reference
+    // Manager references
     MeshManager* mesh_manager;
-    
+    TextureManager* texture_manager;
+    MaterialManager* material_manager;
+
     // Draw queue
     DrawCommand3D draw_queue[MAX_DRAW_CALLS];
     uint32_t draw_count;
@@ -121,7 +125,9 @@ bool render3d_init(Render3D* r3d,
                    VkCommandPool command_pool,
                    VkQueue graphics_queue,
                    uint32_t width, uint32_t height,
-                   MeshManager* mesh_manager);
+                   MeshManager* mesh_manager,
+                   TextureManager* texture_manager,
+                   MaterialManager* material_manager);
 
 // Cleanup 3D rendering context
 void render3d_cleanup(Render3D* r3d);

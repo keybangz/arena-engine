@@ -19,6 +19,8 @@
 #include "renderer/mesh.h"
 #include "renderer/render_3d.h"
 #include "renderer/gltf_loader.h"
+#include "renderer/texture.h"
+#include "renderer/material.h"
 
 #include <GLFW/glfw3.h>
 #include <stdio.h>
@@ -51,10 +53,13 @@ typedef struct TestScene {
     Entity cube_entities[10];
     int cube_count;
 
-    // Mesh manager (holds GPU mesh data)
+    // Managers
     MeshManager mesh_manager;
+    TextureManager texture_manager;
+    MaterialManager material_manager;
     MeshHandle cube_mesh;
     MeshHandle plane_mesh;
+    MaterialHandle cube_materials[10];
     bool meshes_initialized;
 
     // glTF loaded model
@@ -130,22 +135,31 @@ static bool init_scene(void) {
     }
     printf("Vulkan renderer created\n");
 
-    // Initialize mesh manager with Vulkan device
+    // Get Vulkan handles
     VkDevice device = (VkDevice)renderer_get_device(scene.renderer);
     VkPhysicalDevice phys_device = (VkPhysicalDevice)renderer_get_physical_device(scene.renderer);
-    mesh_manager_init(&scene.mesh_manager, device, phys_device);
-    printf("Mesh manager initialized\n");
-
-    // Initialize 3D renderer
     VkRenderPass render_pass = (VkRenderPass)renderer_get_render_pass(scene.renderer);
     VkCommandPool command_pool = (VkCommandPool)renderer_get_command_pool(scene.renderer);
     VkQueue graphics_queue = (VkQueue)renderer_get_graphics_queue(scene.renderer);
     uint32_t width, height;
     renderer_get_extent(scene.renderer, &width, &height);
 
+    // Initialize managers
+    mesh_manager_init(&scene.mesh_manager, device, phys_device);
+    if (!texture_manager_init(&scene.texture_manager, device, phys_device, command_pool, graphics_queue)) {
+        fprintf(stderr, "Failed to initialize texture manager\n");
+        return false;
+    }
+    if (!material_manager_init(&scene.material_manager, &scene.texture_manager)) {
+        fprintf(stderr, "Failed to initialize material manager\n");
+        return false;
+    }
+    printf("Managers initialized (mesh, texture, material)\n");
+
+    // Initialize 3D renderer
     if (!render3d_init(&scene.render3d, device, phys_device, render_pass,
-                       command_pool, graphics_queue,
-                       width, height, &scene.mesh_manager)) {
+                       command_pool, graphics_queue, width, height,
+                       &scene.mesh_manager, &scene.texture_manager, &scene.material_manager)) {
         fprintf(stderr, "Failed to initialize 3D renderer\n");
         return false;
     }
@@ -207,24 +221,37 @@ static bool init_scene(void) {
 
     scene.cube_count = 5;
 
+    // Create colored materials for each cube
+    Vec4 colors[] = {
+        vec4(1.0f, 0.2f, 0.2f, 1.0f),  // Red
+        vec4(0.2f, 1.0f, 0.2f, 1.0f),  // Green
+        vec4(0.2f, 0.4f, 1.0f, 1.0f),  // Blue
+        vec4(1.0f, 1.0f, 0.2f, 1.0f),  // Yellow
+        vec4(1.0f, 0.5f, 0.0f, 1.0f),  // Orange
+    };
+
     for (int i = 0; i < scene.cube_count; i++) {
+        // Create material with unique color
+        scene.cube_materials[i] = material_create_pbr(&scene.material_manager, colors[i],
+            0.0f + (i * 0.2f),   // Increasing metallic
+            0.3f + (i * 0.1f),   // Increasing roughness
+            texture_get_white(&scene.texture_manager));
+
         scene.cube_entities[i] = world_spawn(scene.world);
 
         Transform3D* t = world_add_transform3d(scene.world, scene.cube_entities[i]);
         transform3d_init(t);
-
-        // Arrange cubes in a row
         t->position = vec3((i - 2) * 3.0f, 0.5f, 0);
         t->scale = vec3(1.0f, 1.0f, 1.0f);
 
         MeshRenderer* mr = world_add_mesh_renderer(scene.world, scene.cube_entities[i]);
         mesh_renderer_init(mr);
-        mr->mesh_id = scene.cube_mesh;  // Use actual cube mesh handle
-        mr->material_id = 0;
+        mr->mesh_id = scene.cube_mesh;
+        mr->material_id = scene.cube_materials[i];  // Use unique colored material
         mr->cast_shadows = true;
     }
 
-    printf("Created %d cube entities\n", scene.cube_count);
+    printf("Created %d cube entities with colored materials\n", scene.cube_count);
 
     // =========================================================================
     // Test glTF Loading
@@ -394,10 +421,10 @@ static void run(void) {
 static void cleanup(void) {
     printf("\nCleaning up...\n");
 
-    // Cleanup 3D renderer
+    // Cleanup 3D renderer and managers (order matters: render3d first, then materials, textures, meshes)
     render3d_cleanup(&scene.render3d);
-
-    // Cleanup mesh manager
+    material_manager_cleanup(&scene.material_manager);
+    texture_manager_cleanup(&scene.texture_manager);
     mesh_manager_cleanup(&scene.mesh_manager);
 
     // Destroy renderer (needs valid window)
