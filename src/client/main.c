@@ -1,5 +1,7 @@
 #include "arena/arena.h"
 #include "arena/math/math.h"
+#include "arena/ecs/ecs.h"
+#include "arena/input/input.h"
 #include "renderer/renderer.h"
 
 #include <GLFW/glfw3.h>
@@ -13,7 +15,9 @@
 
 #define WINDOW_WIDTH  1280
 #define WINDOW_HEIGHT 720
-#define WINDOW_TITLE  "Arena Engine v0.2.0"
+#define WINDOW_TITLE  "Arena Engine v0.3.0"
+
+#define GAME_MAX_ENTITIES 10000
 
 #define TARGET_FPS       60
 #define FIXED_TIMESTEP   (1.0 / 30.0)  // 30 Hz simulation
@@ -49,9 +53,19 @@ typedef struct GameState {
 
     // Renderer
     Renderer* renderer;
+
+    // ECS
+    World* world;
+    Entity player;
+
+    // Input
+    InputState input;
 } GameState;
 
 static GameState g_state = {0};
+
+// Player movement speed
+#define PLAYER_SPEED 200.0f  // pixels per second
 
 // ============================================================================
 // Callbacks
@@ -62,10 +76,25 @@ static void glfw_error_callback(int error, const char* description) {
 }
 
 static void glfw_key_callback(GLFWwindow* window, int key, int scancode, int action, int mods) {
-    (void)window; (void)scancode; (void)mods;
+    // Forward to input system
+    input_glfw_key_callback(window, key, scancode, action, mods);
+
+    // Handle escape
     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
         g_state.should_quit = true;
     }
+}
+
+static void glfw_mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
+    input_glfw_mouse_button_callback(window, button, action, mods);
+}
+
+static void glfw_cursor_pos_callback(GLFWwindow* window, double x, double y) {
+    input_glfw_cursor_pos_callback(window, x, y);
+}
+
+static void glfw_scroll_callback(GLFWwindow* window, double x, double y) {
+    input_glfw_scroll_callback(window, x, y);
 }
 
 static void glfw_framebuffer_size_callback(GLFWwindow* window, int width, int height) {
@@ -104,6 +133,9 @@ static bool init_window(void) {
     }
 
     glfwSetKeyCallback(g_state.window, glfw_key_callback);
+    glfwSetMouseButtonCallback(g_state.window, glfw_mouse_button_callback);
+    glfwSetCursorPosCallback(g_state.window, glfw_cursor_pos_callback);
+    glfwSetScrollCallback(g_state.window, glfw_scroll_callback);
     glfwSetFramebufferSizeCallback(g_state.window, glfw_framebuffer_size_callback);
 
     glfwGetFramebufferSize(g_state.window, &g_state.window_width, &g_state.window_height);
@@ -130,6 +162,36 @@ static bool init_game(void) {
            arena_capacity(g_state.persistent_arena) / (1024 * 1024),
            arena_capacity(g_state.frame_arena) / (1024 * 1024));
 
+    // Initialize input
+    input_init(&g_state.input);
+    input_set_callback_target(&g_state.input);
+
+    // Initialize ECS world
+    g_state.world = world_create(g_state.persistent_arena, GAME_MAX_ENTITIES);
+    if (!g_state.world) {
+        fprintf(stderr, "Failed to create ECS world\n");
+        return false;
+    }
+    printf("ECS world created (max entities: %d)\n", GAME_MAX_ENTITIES);
+
+    // Create player entity
+    g_state.player = world_spawn(g_state.world);
+    Transform* player_transform = world_add_transform(g_state.world, g_state.player);
+    player_transform->x = WINDOW_WIDTH / 2.0f;
+    player_transform->y = WINDOW_HEIGHT / 2.0f;
+    player_transform->scale_x = 1.0f;
+    player_transform->scale_y = 1.0f;
+
+    Velocity* player_vel = world_add_velocity(g_state.world, g_state.player);
+    player_vel->x = 0.0f;
+    player_vel->y = 0.0f;
+
+    Player* player_comp = world_add_player(g_state.world, g_state.player);
+    player_comp->player_id = 0;
+    player_comp->team = 0;
+
+    printf("Player entity created at (%.0f, %.0f)\n", player_transform->x, player_transform->y);
+
     // Initialize renderer
     g_state.renderer = renderer_create(g_state.window, g_state.persistent_arena);
     if (!g_state.renderer) {
@@ -145,14 +207,40 @@ static bool init_game(void) {
 // ============================================================================
 
 static void fixed_update(double dt) {
-    (void)dt;  // Will be used when physics is implemented
-
     // Physics and game logic at fixed 30 Hz
     g_state.tick_count++;
 
-    // TODO: Update ECS systems
-    // TODO: Process inputs
-    // TODO: Run physics
+    // Get player input direction
+    float move_x, move_y;
+    input_get_movement(&g_state.input, &move_x, &move_y);
+
+    // Update player velocity
+    Velocity* vel = world_get_velocity(g_state.world, g_state.player);
+    if (vel) {
+        vel->x = move_x * PLAYER_SPEED;
+        vel->y = move_y * PLAYER_SPEED;
+    }
+
+    // Movement system: apply velocity to all entities with Transform + Velocity
+    Query move_query = world_query(g_state.world,
+        component_mask(COMPONENT_TRANSFORM) | component_mask(COMPONENT_VELOCITY));
+
+    Entity entity;
+    while (query_next(&move_query, &entity)) {
+        Transform* t = world_get_transform(g_state.world, entity);
+        Velocity* v = world_get_velocity(g_state.world, entity);
+
+        if (t && v) {
+            t->x += v->x * (float)dt;
+            t->y += v->y * (float)dt;
+
+            // Keep player in bounds
+            if (t->x < 0) t->x = 0;
+            if (t->y < 0) t->y = 0;
+            if (t->x > g_state.window_width) t->x = (float)g_state.window_width;
+            if (t->y > g_state.window_height) t->y = (float)g_state.window_height;
+        }
+    }
 }
 
 static void render(double alpha) {
@@ -164,9 +252,18 @@ static void render(double alpha) {
     // Reset frame arena each frame
     arena_reset(g_state.frame_arena);
 
+    // Print player position every 60 frames (~1 second)
+    if (g_state.frame_count % 60 == 0) {
+        Transform* t = world_get_transform(g_state.world, g_state.player);
+        if (t) {
+            printf("Player position: (%.1f, %.1f) - Use WASD to move\n", t->x, t->y);
+        }
+    }
+
     // Render
     if (renderer_begin_frame(g_state.renderer)) {
-        // TODO: Submit draw calls
+        // Triangle is rendered in begin_frame for now
+        // TODO: Sprite rendering system
 
         renderer_end_frame(g_state.renderer);
     }
@@ -199,6 +296,9 @@ static void run_game_loop(void) {
             fixed_update(FIXED_TIMESTEP);
             g_state.accumulator -= FIXED_TIMESTEP;
         }
+
+        // Update input state for next frame (after all fixed updates)
+        input_update(&g_state.input);
 
         // Render with interpolation alpha
         double alpha = g_state.accumulator / FIXED_TIMESTEP;
@@ -245,7 +345,7 @@ static void shutdown_game(void) {
 int main(int argc, char** argv) {
     (void)argc; (void)argv;
 
-    printf("Arena Engine Client v0.2.0\n");
+    printf("Arena Engine Client v0.3.0\n");
     printf("==========================\n");
 
     if (!init_window()) {

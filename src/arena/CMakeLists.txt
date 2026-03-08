@@ -15,10 +15,14 @@ add_library(arena-core STATIC
     math/quat.c
     math/quat.h
     math/math.h
+    ecs/ecs.c
     ecs/ecs.h
+    input/input.c
+    input/input.h
     world/world.h
     network/network.h
     server/server.h
 )
 
 target_compile_options(arena-core PRIVATE -Wall -Wextra -Wpedantic -g)
+target_link_libraries(arena-core PRIVATE m)  # Math library for sqrt, etc.

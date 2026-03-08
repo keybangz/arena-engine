@@ -52,4 +52,8 @@ void renderer_on_resize(Renderer* renderer, int width, int height);
 // Stats
 uint64_t renderer_get_frame_count(const Renderer* renderer);
 
+// Simple shape drawing (temporary until sprite system)
+void renderer_set_viewport_size(Renderer* renderer, float width, float height);
+void renderer_draw_quad(Renderer* renderer, float x, float y, float width, float height, uint32_t color);
+
 #endif
