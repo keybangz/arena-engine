@@ -4,6 +4,8 @@
 #include "arena/input/input.h"
 #include "arena/game/ability.h"
 #include "arena/game/combat.h"
+#include "arena/network/network.h"
+#include "arena/network/client.h"
 #include "renderer/renderer.h"
 #include "renderer/sprite_batch.h"
 
@@ -18,7 +20,7 @@
 
 #define WINDOW_WIDTH  1280
 #define WINDOW_HEIGHT 720
-#define WINDOW_TITLE  "Arena Engine v0.4.0"
+#define WINDOW_TITLE  "Arena Engine v0.5.0"
 
 #define GAME_MAX_ENTITIES 10000
 
@@ -64,6 +66,10 @@ typedef struct GameState {
 
     // Input
     InputState input;
+
+    // Networking
+    NetClient* net_client;
+    bool is_multiplayer;
 } GameState;
 
 static GameState g_state = {0};
@@ -434,7 +440,7 @@ static void shutdown_game(void) {
 int main(int argc, char** argv) {
     (void)argc; (void)argv;
 
-    printf("Arena Engine Client v0.4.0\n");
+    printf("Arena Engine Client v0.5.0\n");
     printf("==========================\n");
 
     if (!init_window()) {

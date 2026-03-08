@@ -25,6 +25,12 @@ add_library(arena-core STATIC
     game/combat.c
     world/world.h
     network/network.h
+    network/network.c
+    network/protocol.h
+    network/server.h
+    network/server.c
+    network/client.h
+    network/client.c
     server/server.h
 )
 
