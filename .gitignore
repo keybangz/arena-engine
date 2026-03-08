@@ -1,18 +1,372 @@
+# ==============================================================================
+# Arena Engine .gitignore
+# ==============================================================================
+
+# ==============================================================================
+# Build Artifacts
+# ==============================================================================
+
+# CMake
 build/
-*.o
-*.a
-*.so
-*.dylib
-*.exe
+out/
+cmake-build-*/
 CMakeCache.txt
 CMakeFiles/
 cmake_install.cmake
 Makefile
-compile_commands.json
-.vscode/
-.idea/
-*.swp
-*~
-.DS_Store
+CTestTestfile.cmake
+Testing/
+_deps/
+
+# Compiled objects
+*.o
+*.obj
+*.lo
+*.slo
+
+# Compiled libraries
+*.a
+*.lib
+*.la
+*.lai
+*.so
+*.so.*
+*.dylib
+*.dll
+
+# Executables
+*.exe
+*.out
+*.app
+arena-client
+arena-server
+arena-editor
+arena-launcher
+
+# Precompiled headers
+*.gch
+*.pch
+
+# ==============================================================================
+# Shader Compilation
+# ==============================================================================
+
+# SPIR-V compiled shaders (generated from .vert/.frag/.comp)
 *.spv
+
+# Shader cache
+shader_cache/
+pipeline_cache.bin
+
+# ==============================================================================
+# IDE & Editor
+# ==============================================================================
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# JetBrains (CLion, etc.)
+.idea/
+*.iml
+
+# Visual Studio
+.vs/
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+*.sln
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Vim/Neovim
+*.swp
+*.swo
+*~
+Session.vim
+.netrwhist
+tags
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+.dir-locals.el
+
+# Sublime Text
+*.sublime-workspace
+*.sublime-project
+
+# Kate
+*.kate-swp
+
+# ==============================================================================
+# OS Generated
+# ==============================================================================
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+.directory
+.Trash-*
+
+# ==============================================================================
+# Development Tools
+# ==============================================================================
+
+# Clangd / LSP
 .cache/
+compile_commands.json
+.clangd/
+.ccls-cache/
+
+# Valgrind
+vgcore.*
+*.memcheck
+
+# GDB
+.gdb_history
+
+# Address Sanitizer
+*.asan
+
+# Coverage
+*.gcno
+*.gcda
+*.gcov
+coverage/
+lcov.info
+
+# Profiling
+*.prof
+perf.data
+perf.data.old
+callgrind.out.*
+cachegrind.out.*
+
+# ==============================================================================
+# 3D Assets (Large Binary Files - Use Git LFS)
+# ==============================================================================
+
+# 3D Models (uncomment if not using Git LFS)
+# *.gltf
+# *.glb
+# *.fbx
+# *.obj
+# *.blend
+# *.blend1
+# *.max
+# *.mb
+# *.ma
+
+# Textures (uncomment if not using Git LFS)
+# *.png
+# *.jpg
+# *.jpeg
+# *.tga
+# *.bmp
+# *.psd
+# *.ktx
+# *.ktx2
+# *.dds
+# *.hdr
+# *.exr
+
+# Audio (uncomment if not using Git LFS)
+# *.wav
+# *.mp3
+# *.ogg
+# *.flac
+
+# Always ignore raw/source assets (should be processed by asset pipeline)
+assets/raw/
+assets/source/
+assets/import/
+
+# Temporary asset processing
+assets/temp/
+assets/cache/
+
+# ==============================================================================
+# Game Runtime
+# ==============================================================================
+
+# User configuration
+config/user_settings.json
+config/keybindings.json
+settings.ini
+preferences.json
+
+# Save files
+saves/
+savegames/
+
+# Logs
+logs/
+*.log
+crash_*.txt
+arena_*.log
+
+# Replays (can be large)
+replays/
+*.replay
+*.rep
+
+# Screenshots
+screenshots/
+
+# Cache
+cache/
+.arena_cache/
+
+# ==============================================================================
+# Steam Integration
+# ==============================================================================
+
+# Steam SDK (download separately)
+sdk/steamworks/
+steam_api.dll
+steam_api64.dll
+libsteam_api.so
+steam_appid.txt
+
+# Steam runtime
+.steam/
+
+# ==============================================================================
+# External Dependencies
+# ==============================================================================
+
+# Vendored libraries (if downloaded, not committed)
+external/
+third_party/
+vendor/
+deps/
+
+# Package managers
+vcpkg_installed/
+conan/
+
+# ==============================================================================
+# Tools Generated
+# ==============================================================================
+
+# Map editor
+*.map.backup
+*.map.autosave
+editor_layout.ini
+
+# Asset packer
+packed_assets/
+*.pak
+*.bundle
+
+# ==============================================================================
+# Testing
+# ==============================================================================
+
+# Test output
+test_results/
+test_output/
+*.test.log
+
+# Benchmarks
+benchmark_results/
+*.bench
+
+# ==============================================================================
+# Documentation Build
+# ==============================================================================
+
+# Generated docs
+docs/_build/
+docs/html/
+docs/latex/
+site/
+doxygen/
+
+# ==============================================================================
+# Packaging & Distribution
+# ==============================================================================
+
+# Release builds
+release/
+dist/
+publish/
+packages/
+
+# Archives
+*.zip
+*.tar.gz
+*.tar.xz
+*.7z
+*.rar
+
+# AppImage
+*.AppImage
+*.AppDir/
+
+# Flatpak
+.flatpak-builder/
+*.flatpak
+
+# Installers
+*.deb
+*.rpm
+*.msi
+
+# ==============================================================================
+# Secrets & Credentials (NEVER commit these)
+# ==============================================================================
+
+# API keys
+*.key
+*.pem
+*.p12
+secrets/
+credentials/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# ==============================================================================
+# Misc
+# ==============================================================================
+
+# Backup files
+*.bak
+*.backup
+*.old
+*.orig
+
+# Temporary files
+*.tmp
+*.temp
+tmp/
+temp/
+
+# Debug dumps
+*.dmp
+core
+core.*
+
+# Local overrides (for developer-specific ignores)
+.gitignore.local
