@@ -150,6 +150,9 @@ static bool init_window(void) {
 
     glfwGetFramebufferSize(g_state.window, &g_state.window_width, &g_state.window_height);
 
+    // Explicitly show window (required on some platforms like Wayland/KDE)
+    glfwShowWindow(g_state.window);
+
     printf("Window created: %dx%d\n", g_state.window_width, g_state.window_height);
     return true;
 }

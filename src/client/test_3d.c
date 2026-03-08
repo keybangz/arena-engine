@@ -15,6 +15,7 @@
 #include "arena/ecs/ecs.h"
 #include "arena/ecs/components_3d.h"
 #include "arena/game/camera_system.h"
+#include "renderer/renderer.h"
 #include "renderer/mesh.h"
 #include "renderer/render_3d.h"
 #include "renderer/gltf_loader.h"
@@ -41,13 +42,14 @@ typedef struct TestScene {
     GLFWwindow* window;
     Arena* arena;
     World* world;
-    
+    Renderer* renderer;  // Vulkan renderer
+
     // Entities
     Entity camera_entity;
     Entity light_entity;
     Entity cube_entities[10];
     int cube_count;
-    
+
     // Mesh manager (holds GPU mesh data)
     MeshManager mesh_manager;
     MeshHandle cube_mesh;
@@ -102,7 +104,10 @@ static bool init_window(void) {
     
     glfwSetKeyCallback(scene.window, key_callback);
     glfwSetFramebufferSizeCallback(scene.window, framebuffer_size_callback);
-    
+
+    // Explicitly show window (required on some platforms like Wayland/KDE)
+    glfwShowWindow(scene.window);
+
     printf("Window created: %dx%d\n", WINDOW_WIDTH, WINDOW_HEIGHT);
     return true;
 }
@@ -114,14 +119,22 @@ static bool init_scene(void) {
         fprintf(stderr, "Failed to create memory arena\n");
         return false;
     }
-    
+
+    // Create Vulkan renderer
+    scene.renderer = renderer_create(scene.window, scene.arena);
+    if (!scene.renderer) {
+        fprintf(stderr, "Failed to create Vulkan renderer\n");
+        return false;
+    }
+    printf("Vulkan renderer created\n");
+
     // Create ECS world
     scene.world = world_create(scene.arena, TEST_MAX_ENTITIES);
     if (!scene.world) {
         fprintf(stderr, "Failed to create ECS world\n");
         return false;
     }
-    
+
     printf("ECS world created\n");
     
     // =========================================================================
@@ -248,7 +261,38 @@ static void update(float dt) {
 }
 
 static void render(void) {
-    // For now, just print status every second
+    // Begin Vulkan frame
+    if (!renderer_begin_frame(scene.renderer)) {
+        return;  // Swapchain out of date, skip frame
+    }
+
+    // Draw cubes as colored quads (placeholder until 3D pipeline is complete)
+    // Each cube is represented as a quad on screen for now
+    for (int i = 0; i < scene.cube_count; i++) {
+        Transform3D* t = world_get_transform3d(scene.world, scene.cube_entities[i]);
+        if (t) {
+            // Map 3D position to 2D screen space (simple orthographic projection)
+            float screen_x = 640 + t->position.x * 50;  // Center + offset
+            float screen_y = 360 - t->position.y * 50;  // Center - offset (Y flipped)
+            float size = 40.0f;
+
+            // Different colors for each cube
+            float hue = (float)i / scene.cube_count;
+            float r = 0.5f + 0.5f * sinf(hue * 6.28f);
+            float g = 0.5f + 0.5f * sinf(hue * 6.28f + 2.09f);
+            float b = 0.5f + 0.5f * sinf(hue * 6.28f + 4.18f);
+
+            renderer_draw_quad(scene.renderer,
+                screen_x - size/2, screen_y - size/2,
+                size, size,
+                r, g, b, 1.0f);
+        }
+    }
+
+    // End Vulkan frame (submit and present)
+    renderer_end_frame(scene.renderer);
+
+    // Print status every second
     static float print_timer = 0;
     print_timer += 0.016f;
 
@@ -261,14 +305,6 @@ static void render(void) {
         if (camera_system_get_matrices(scene.world, &view, &projection, &cam_pos)) {
             printf("Frame | Camera: (%.1f, %.1f, %.1f) | Cubes: %d | Time: %.1fs\n",
                    cam_pos.x, cam_pos.y, cam_pos.z, scene.cube_count, scene.time);
-        }
-
-        // Print first cube transform
-        Transform3D* t = world_get_transform3d(scene.world, scene.cube_entities[0]);
-        if (t) {
-            printf("  Cube[0]: pos=(%.2f, %.2f, %.2f) rot=(%.2f, %.2f, %.2f, %.2f)\n",
-                   t->position.x, t->position.y, t->position.z,
-                   t->rotation.x, t->rotation.y, t->rotation.z, t->rotation.w);
         }
     }
 }
@@ -311,6 +347,12 @@ static void run(void) {
 
 static void cleanup(void) {
     printf("\nCleaning up...\n");
+
+    // Destroy renderer first (needs valid window)
+    if (scene.renderer) {
+        renderer_destroy(scene.renderer);
+        scene.renderer = NULL;
+    }
 
     if (scene.arena) {
         arena_destroy(scene.arena);

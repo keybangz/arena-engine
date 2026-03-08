@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
+#include <time.h>
 
 // ============================================================================
 // Constants
@@ -994,9 +995,23 @@ static void cleanup_swapchain(Renderer* r) {
 static bool recreate_swapchain(Renderer* r) {
     int width = 0, height = 0;
     glfwGetFramebufferSize(r->window, &width, &height);
-    while (width == 0 || height == 0) {
+
+    // Use non-blocking poll instead of blocking wait to avoid freezing
+    // when window is minimized or hidden on some window managers
+    int max_attempts = 100;  // Prevent infinite loop
+    while ((width == 0 || height == 0) && max_attempts-- > 0) {
         glfwGetFramebufferSize(r->window, &width, &height);
-        glfwWaitEvents();
+        glfwPollEvents();
+        if (width == 0 || height == 0) {
+            // Small sleep to avoid busy-waiting
+            struct timespec ts = {0, 10000000};  // 10ms
+            nanosleep(&ts, NULL);
+        }
+    }
+
+    if (width == 0 || height == 0) {
+        fprintf(stderr, "Warning: Window has zero size, skipping swapchain recreation\n");
+        return false;
     }
 
     vkDeviceWaitIdle(r->device);
