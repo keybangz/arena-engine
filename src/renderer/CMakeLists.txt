@@ -96,6 +96,15 @@ if(GLSLANG_VALIDATOR)
         COMMENT "Compiling mesh.frag"
     )
 
+    # Skinned mesh shaders (skeletal animation with GPU skinning)
+    add_custom_command(
+        OUTPUT ${SHADER_OUT_DIR}/skinned.vert.spv
+        COMMAND ${GLSLANG_VALIDATOR} -V ${SHADER_DIR}/skinned.vert -o ${SHADER_OUT_DIR}/skinned.vert.spv
+        DEPENDS ${SHADER_DIR}/skinned.vert
+        COMMENT "Compiling skinned.vert"
+    )
+
+    # Skinned mesh uses mesh.frag (same fragment shader as static mesh)
     add_custom_target(shaders ALL
         DEPENDS
             ${SHADER_OUT_DIR}/triangle.vert.spv
@@ -106,6 +115,7 @@ if(GLSLANG_VALIDATOR)
             ${SHADER_OUT_DIR}/quad.frag.spv
             ${SHADER_OUT_DIR}/mesh.vert.spv
             ${SHADER_OUT_DIR}/mesh.frag.spv
+            ${SHADER_OUT_DIR}/skinned.vert.spv
     )
 
     add_dependencies(arena-renderer shaders)
