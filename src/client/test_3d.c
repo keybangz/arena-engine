@@ -15,6 +15,7 @@
 #include "arena/ecs/ecs.h"
 #include "arena/ecs/components_3d.h"
 #include "arena/game/camera_system.h"
+#include "arena/game/animation_system.h"
 #include "renderer/renderer.h"
 #include "renderer/mesh.h"
 #include "renderer/render_3d.h"
@@ -293,6 +294,107 @@ static bool init_scene(void) {
     }
 
     printf("--- glTF Test Complete ---\n\n");
+
+    // =========================================================================
+    // Test Rigged Character Model Loading
+    // =========================================================================
+    printf("--- Testing Rigged Character Model ---\n");
+    
+    GltfLoadResult gltf_character = {0};
+    if (gltf_load_file(&scene.mesh_manager, "../assets/models/character.glb", &gltf_character)) {
+        printf("Character glTF Load Success!\n");
+        printf("  Meshes: %u\n", gltf_character.mesh_count);
+        printf("  Bounds: min=(%.2f, %.2f, %.2f) max=(%.2f, %.2f, %.2f)\n",
+               gltf_character.bounds_min.x, gltf_character.bounds_min.y, gltf_character.bounds_min.z,
+               gltf_character.bounds_max.x, gltf_character.bounds_max.y, gltf_character.bounds_max.z);
+        
+        for (uint32_t i = 0; i < gltf_character.mesh_count; i++) {
+            printf("  [%u] %s: %u verts, %u indices%s\n",
+                   i, gltf_character.meshes[i].name,
+                   gltf_character.meshes[i].vertex_count,
+                   gltf_character.meshes[i].index_count,
+                   gltf_character.meshes[i].is_skinned ? " (SKINNED)" : "");
+        }
+    } else {
+        printf("Character glTF Load Note: %s\n", gltf_character.error_message);
+    }
+    
+    printf("--- Rigged Character Test Complete ---\n\n");
+
+    // =========================================================================
+    // Test Animation System
+    // =========================================================================
+    printf("--- Testing Animation System ---\n");
+    
+    // Create animation manager
+    AnimationManager* anim_mgr = animation_manager_create(scene.arena);
+    if (!anim_mgr) {
+        printf("Animation system test: FAILED - Could not create AnimationManager\n");
+    } else {
+        printf("Animation system test: Created AnimationManager\n");
+        
+        // Create a simple test skeleton (3 bones: root, arm, hand)
+        BoneNode* test_bones = arena_alloc(scene.arena, sizeof(BoneNode) * 3, 8);
+        
+        test_bones[0] = (BoneNode){
+            .index = 0,
+            .name = "Root",
+            .parent_index = 0xFF,  // Root has no parent
+            .bind_matrix = mat4_identity(),
+            .inverse_bind_matrix = mat4_identity(),
+            .current_matrix = mat4_identity(),
+            .is_animated = false
+        };
+        
+        test_bones[1] = (BoneNode){
+            .index = 1,
+            .name = "Arm",
+            .parent_index = 0,     // Arm's parent is Root
+            .bind_matrix = mat4_translate(vec3(1.0f, 0.0f, 0.0f)),
+            .inverse_bind_matrix = mat4_translate(vec3(-1.0f, 0.0f, 0.0f)),
+            .current_matrix = mat4_identity(),
+            .is_animated = true
+        };
+        
+        test_bones[2] = (BoneNode){
+            .index = 2,
+            .name = "Hand",
+            .parent_index = 1,     // Hand's parent is Arm
+            .bind_matrix = mat4_translate(vec3(1.0f, 0.0f, 0.0f)),
+            .inverse_bind_matrix = mat4_translate(vec3(-1.0f, 0.0f, 0.0f)),
+            .current_matrix = mat4_identity(),
+            .is_animated = true
+        };
+        
+        // Load test skeleton
+        uint32_t skeleton_id = animation_manager_load_skeleton(anim_mgr, "TestSkeleton", 
+                                                                test_bones, 3, 0);
+        printf("  Loaded test skeleton: ID=%u\n", skeleton_id);
+        
+        // Verify skeleton loaded
+        const Skeleton* loaded_skel = animation_manager_get_skeleton(anim_mgr, skeleton_id);
+        if (loaded_skel) {
+            printf("  Skeleton verification: Name='%s', Bones=%u, Root=%u\n", 
+                   loaded_skel->name, loaded_skel->bone_count, loaded_skel->root_bone_index);
+            
+            // Check bone hierarchy
+            for (uint32_t i = 0; i < loaded_skel->bone_count; i++) {
+                uint32_t parent_id = (loaded_skel->bones[i].parent_index == 0xFF) ? 0xFF : loaded_skel->bones[i].parent_index;
+                printf("    [%u] %s (parent=%u, animated=%s)\n", 
+                       i, loaded_skel->bones[i].name, parent_id, 
+                       loaded_skel->bones[i].is_animated ? "yes" : "no");
+            }
+            printf("Animation system test: Skeleton loading PASSED\n");
+        } else {
+            printf("Animation system test: Skeleton loading FAILED\n");
+        }
+        
+        // Note: Full animation clip testing with real glTF models will be done
+        // after we load a rigged character model with skeletal animations
+        printf("  (Animation clip testing deferred to full glTF rigged model test)\n");
+    }
+    
+    printf("--- Animation System Test Complete ---\n\n");
 
     scene.running = true;
     return true;

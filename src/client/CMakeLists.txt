@@ -50,3 +50,37 @@ target_link_libraries(arena-test-character
 
 target_compile_options(arena-test-character PRIVATE -Wall -Wextra -Wpedantic -g)
 
+# Animation Playback Integration Test
+add_executable(arena-test-animation-playback
+    test_animation_playback.c
+)
+
+target_link_libraries(arena-test-animation-playback
+    PRIVATE arena-core
+    PRIVATE m
+)
+
+target_compile_options(arena-test-animation-playback PRIVATE -Wall -Wextra -Wpedantic -g)
+
+add_executable(arena-test-character-animation
+    test_character_animation.c
+)
+
+target_link_libraries(arena-test-character-animation
+    PRIVATE arena-core
+    PRIVATE arena-renderer
+    PRIVATE m
+)
+
+add_executable(arena-test-cgltf-load
+    test_cgltf_load.c
+)
+
+target_link_libraries(arena-test-cgltf-load
+    PRIVATE arena-core
+    PRIVATE arena-renderer
+    PRIVATE m
+)
+
+target_compile_options(arena-test-cgltf-load PRIVATE -Wall -Wextra -Wpedantic -g)
+
