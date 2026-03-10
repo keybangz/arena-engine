@@ -27,6 +27,9 @@ static const size_t COMPONENT_SIZES[COMPONENT_TYPE_COUNT] = {
     [COMPONENT_CAMERA]         = sizeof(Camera),
     [COMPONENT_LIGHT]          = sizeof(Light),
     [COMPONENT_SKINNED_MESH]   = sizeof(SkinnedMesh),
+
+    // Animation system (v0.9.0+)
+    [COMPONENT_ANIMATION_STATE] = sizeof(AnimationState),
 };
 
 // ============================================================================
