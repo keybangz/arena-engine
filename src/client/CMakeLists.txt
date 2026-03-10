@@ -25,3 +25,16 @@ target_link_libraries(arena-test3d
 )
 
 target_compile_options(arena-test3d PRIVATE -Wall -Wextra -Wpedantic -g)
+
+# Animation System Unit Tests
+add_executable(arena-test-animation
+    test_animation.c
+)
+
+target_link_libraries(arena-test-animation
+    PRIVATE arena-core
+    PRIVATE m
+)
+
+target_compile_options(arena-test-animation PRIVATE -Wall -Wextra -Wpedantic -g)
+
