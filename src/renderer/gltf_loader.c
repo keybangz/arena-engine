@@ -295,6 +295,28 @@ static bool load_primitive(MeshManager* mm, const cgltf_primitive* prim,
 
 
 // ============================================================================
+// Helper Functions for Skeleton Loading
+// ============================================================================
+
+/**
+ * Find bone index in skeleton for a given glTF node
+ * Used to map animation channel targets to bone indices
+ */
+static uint32_t find_bone_index_in_skin(cgltf_node* target_node, cgltf_skin* skin) {
+    if (!target_node || !skin) return 0;
+    
+    for (cgltf_size i = 0; i < skin->joints_count; i++) {
+        if (skin->joints[i] == target_node) {
+            return (uint32_t)i;
+        }
+    }
+    
+    // Not found - return 0 (first bone) as fallback
+    return 0;
+}
+
+
+// ============================================================================
 // Public API Implementation
 // ============================================================================
 
@@ -367,6 +389,87 @@ bool gltf_load_file_ex(MeshManager* mm, const char* filepath,
                        info->name, info->vertex_count, info->index_count,
                        info->is_skinned ? ", skinned" : "");
             }
+        }
+    }
+
+    // Load skeleton hierarchy from skins (if any animations use them)
+    // This must happen BEFORE loading animations so bone names are available
+    if (data->skins_count > 0 && result->skeleton_count == 0) {
+        printf("glTF: Loading %zu skeletons from skins\n", data->skins_count);
+        
+        for (cgltf_size s = 0; s < data->skins_count && result->skeleton_count < GLTF_MAX_ANIMATIONS_PER_FILE; s++) {
+            cgltf_skin* skin = &data->skins[s];
+            GltfSkeleton* skeleton = &result->skeletons[result->skeleton_count];
+            result->skeleton_count++;
+            
+            // Set skeleton name
+            strncpy(skeleton->name, skin->name ? skin->name : "default", GLTF_MAX_NAME_LENGTH);
+            
+            // Allocate bone data
+            skeleton->bone_count = skin->joints_count;
+            skeleton->bone_names = (char**)malloc(skin->joints_count * sizeof(char*));
+            skeleton->bind_matrices = (Mat4*)malloc(skin->joints_count * sizeof(Mat4));
+            skeleton->inverse_bind_matrices = (Mat4*)malloc(skin->joints_count * sizeof(Mat4));
+            skeleton->parent_indices = (uint32_t*)malloc(skin->joints_count * sizeof(uint32_t));
+            
+            if (!skeleton->bone_names || !skeleton->bind_matrices || 
+                !skeleton->inverse_bind_matrices || !skeleton->parent_indices) {
+                fprintf(stderr, "Failed to allocate skeleton data\n");
+                continue;
+            }
+            
+            // Load joint names and build parent hierarchy
+            for (cgltf_size j = 0; j < skin->joints_count; j++) {
+                cgltf_node* joint = skin->joints[j];
+                
+                // Store bone name
+                size_t name_len = joint->name ? strlen(joint->name) : 0;
+                skeleton->bone_names[j] = (char*)malloc(name_len + 1);
+                if (skeleton->bone_names[j]) {
+                    if (joint->name) {
+                        strcpy(skeleton->bone_names[j], joint->name);
+                    } else {
+                        sprintf(skeleton->bone_names[j], "bone_%zu", j);
+                    }
+                }
+                
+                // Load inverse bind matrix (or set to identity if not present)
+                if (skin->inverse_bind_matrices) {
+                    float ibm_data[16];
+                    cgltf_accessor_read_float(skin->inverse_bind_matrices, j, ibm_data, 16);
+                    // Column-major to column-major copy
+                    for (int i = 0; i < 16; i++) {
+                        skeleton->inverse_bind_matrices[j].m[i/4][i%4] = ibm_data[i];
+                    }
+                } else {
+                    // Identity matrix
+                    skeleton->inverse_bind_matrices[j] = mat4_identity();
+                }
+                
+                // Bind matrix is identity (not typically stored in glTF)
+                skeleton->bind_matrices[j] = mat4_identity();
+                
+                // Find parent bone index
+                // In glTF, parent relationship is in the node hierarchy, not the skin
+                uint32_t parent_idx = 0xFF; // No parent (root)
+                if (joint->parent) {
+                    // Search for parent in joint list
+                    for (cgltf_size p = 0; p < skin->joints_count; p++) {
+                        if (skin->joints[p] == joint->parent) {
+                            parent_idx = (uint32_t)p;
+                            break;
+                        }
+                    }
+                }
+                skeleton->parent_indices[j] = parent_idx;
+                
+                // Track root bone
+                if (parent_idx == 0xFF && skeleton->root_bone_index == 0) {
+                    skeleton->root_bone_index = (uint32_t)j;
+                }
+            }
+            
+            printf("  Loaded skeleton '%s' with %u bones\n", skeleton->name, skeleton->bone_count);
         }
     }
 
@@ -452,8 +555,30 @@ bool gltf_load_file_ex(MeshManager* mm, const char* filepath,
                 cgltf_animation_channel* channel = &anim->channels[c];
                 GltfAnimationChannel* clip_channel = &clip->channels[c];
                 
-                // Find bone index (simplified - should build proper bone name mapping)
-                clip_channel->bone_index = (uint32_t)c; // TODO: Map bone names properly
+                // Find bone index by mapping animation channel target to skeleton bone
+                // channel->target_node points to the glTF node being animated
+                // We need to find which bone index this node corresponds to
+                uint32_t bone_idx = 0;
+                
+                if (channel->target_node && data->skins_count > 0) {
+                    // Use first skin to map node to bone index
+                    cgltf_skin* skin = &data->skins[0];
+                    bone_idx = find_bone_index_in_skin(channel->target_node, skin);
+                } else if (channel->target_node && result->skeleton_count > 0) {
+                    // Fallback: search by node name in loaded skeleton
+                    cgltf_node* target_node = channel->target_node;
+                    const char* target_name = target_node->name ? target_node->name : "";
+                    
+                    GltfSkeleton* skeleton = &result->skeletons[0];
+                    for (uint32_t b = 0; b < skeleton->bone_count; b++) {
+                        if (skeleton->bone_names[b] && strcmp(skeleton->bone_names[b], target_name) == 0) {
+                            bone_idx = b;
+                            break;
+                        }
+                    }
+                }
+                
+                clip_channel->bone_index = bone_idx;
                 
                 // Load keyframe data
                 if (channel->sampler) {
