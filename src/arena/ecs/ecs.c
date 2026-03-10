@@ -33,39 +33,11 @@ static const size_t COMPONENT_SIZES[COMPONENT_TYPE_COUNT] = {
 // System Entry
 // ============================================================================
 
-#define MAX_SYSTEMS 32
-
-typedef struct System {
-    const char* name;
-    SystemFn fn;
-    ComponentMask required;
-} System;
-
 // ============================================================================
-// World Structure
+// World Structure (defined in ecs.h)
 // ============================================================================
 
-struct World {
-    Arena* arena;
-    uint32_t max_entities;
-    uint32_t entity_count;
 
-    // Entity data (parallel arrays)
-    uint8_t* generations;      // Generation counter per slot
-    ComponentMask* masks;      // Component mask per entity
-
-    // Free list for recycling entity slots
-    uint32_t* free_list;
-    uint32_t free_count;
-    uint32_t next_index;       // Next unused index
-
-    // Component storage (sparse arrays)
-    void* components[COMPONENT_TYPE_COUNT];
-
-    // Systems
-    System systems[MAX_SYSTEMS];
-    uint32_t system_count;
-};
 
 // ============================================================================
 // World Creation/Destruction
@@ -267,14 +239,13 @@ void query_reset(Query* query) {
 // System Registration
 // ============================================================================
 
-void world_register_system(World* world, const char* name, SystemFn fn, ComponentMask required) {
+void world_register_system(World* world, SystemFn fn, ComponentMask required) {
     if (world->system_count >= MAX_SYSTEMS) {
         fprintf(stderr, "ECS: Max systems reached\n");
         return;
     }
 
     System* sys = &world->systems[world->system_count++];
-    sys->name = name;
     sys->fn = fn;
     sys->required = required;
 }

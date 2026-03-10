@@ -370,6 +370,141 @@ bool gltf_load_file_ex(MeshManager* mm, const char* filepath,
         }
     }
 
+    // Load animations and skeletons if present
+    if (data->animations_count > 0) {
+        printf("glTF: Loading %zu animations and skeletons\n", data->animations_count);
+        
+        // Count unique skeletons (usually one per model, but could be multiple)
+        result->skeleton_count = 0;
+        for (cgltf_size a = 0; a < data->animations_count && result->skeleton_count < GLTF_MAX_ANIMATIONS_PER_FILE; a++) {
+            cgltf_animation* anim = &data->animations[a];
+            
+            // Try to find skeleton for this animation
+            bool skeleton_found = false;
+            for (uint32_t s = 0; s < result->skeleton_count; s++) {
+                if (strcmp(result->skeletons[s].name, anim->name) == 0) {
+                    skeleton_found = true;
+                    break;
+                }
+            }
+            
+            if (!skeleton_found) {
+                // Create new skeleton
+                GltfSkeleton* skeleton = &result->skeletons[result->skeleton_count];
+                result->skeleton_count++;
+                
+                // Initialize skeleton
+                strncpy(skeleton->name, anim->name ? anim->name : "default", GLTF_MAX_NAME_LENGTH);
+                skeleton->bone_count = 0;
+                skeleton->root_bone_index = 0;
+                skeleton->bone_names = NULL;
+                skeleton->bind_matrices = NULL;
+                skeleton->inverse_bind_matrices = NULL;
+                skeleton->parent_indices = NULL;
+                
+                printf("  Created skeleton: %s\n", skeleton->name);
+            }
+        }
+        
+        // Load each animation
+        result->animation_count = 0;
+        for (cgltf_size a = 0; a < data->animations_count && result->animation_count < GLTF_MAX_ANIMATIONS_PER_FILE; a++) {
+            cgltf_animation* anim = &data->animations[a];
+            
+            GltfAnimationClip* clip = &result->animations[result->animation_count];
+            result->animation_count++;
+            
+            // Initialize animation clip
+            strncpy(clip->name, anim->name ? anim->name : "animation", GLTF_MAX_NAME_LENGTH);
+            clip->duration = 0.0f;
+            clip->channel_count = 0;
+            clip->channels = NULL;
+            clip->is_looping = true;
+            clip->playback_speed = 1.0f;
+            
+            // Calculate animation duration
+            for (cgltf_size c = 0; c < anim->channels_count; c++) {
+                cgltf_animation_channel* channel = &anim->channels[c];
+                if (channel->sampler && channel->sampler->input) {
+                    for (cgltf_size k = 0; k < channel->sampler->input->count; k++) {
+                        float time = 0.0f;
+                        cgltf_accessor_read_float(channel->sampler->input, k, &time, 1);
+                        if (time > clip->duration) {
+                            clip->duration = time;
+                        }
+                    }
+                }
+            }
+            
+            // Allocate channels
+            clip->channel_count = anim->channels_count;
+            clip->channels = (GltfAnimationChannel*)calloc(clip->channel_count, sizeof(GltfAnimationChannel));
+            if (!clip->channels) {
+                printf("  Warning: Failed to allocate channels for animation %s\n", clip->name);
+                continue;
+            }
+            
+            printf("  Loaded animation: %s (%.2f duration, %zu channels)\n", 
+                   clip->name, clip->duration, clip->channel_count);
+            
+            // Load channel data
+            for (cgltf_size c = 0; c < anim->channels_count; c++) {
+                cgltf_animation_channel* channel = &anim->channels[c];
+                GltfAnimationChannel* clip_channel = &clip->channels[c];
+                
+                // Find bone index (simplified - should build proper bone name mapping)
+                clip_channel->bone_index = (uint32_t)c; // TODO: Map bone names properly
+                
+                // Load keyframe data
+                if (channel->sampler) {
+                    cgltf_animation_sampler* sampler = channel->sampler;
+                    
+                    // Allocate time keyframes
+                    clip_channel->time_keyframe_count = sampler->input->count;
+                    clip_channel->time_keyframes = (float*)malloc(sampler->input->count * sizeof(float));
+                    if (!clip_channel->time_keyframes) continue;
+                    
+                    // Read time keyframes
+                    for (cgltf_size k = 0; k < sampler->input->count; k++) {
+                        cgltf_accessor_read_float(sampler->input, k, &clip_channel->time_keyframes[k], 1);
+                    }
+                    
+                    // Load animation data based on channel type
+                    if (channel->target_path == cgltf_animation_path_type_translation) {
+                        clip_channel->position_keyframe_count = sampler->output->count;
+                        clip_channel->position_keyframes = (Vec3*)malloc(sampler->output->count * sizeof(Vec3));
+                        if (clip_channel->position_keyframes) {
+                            for (cgltf_size k = 0; k < sampler->output->count; k++) {
+                                cgltf_accessor_read_float(sampler->output, k, &clip_channel->position_keyframes[k].x, 3);
+                            }
+                        }
+                     } else if (channel->target_path == cgltf_animation_path_type_rotation) {
+                        clip_channel->rotation_keyframe_count = sampler->output->count;
+                        clip_channel->rotation_keyframes = (Quat*)malloc(sampler->output->count * sizeof(Quat));
+                        if (clip_channel->rotation_keyframes) {
+                            for (cgltf_size k = 0; k < sampler->output->count; k++) {
+                                float rot[4];
+                                cgltf_accessor_read_float(sampler->output, k, rot, 4);
+                                clip_channel->rotation_keyframes[k] = (Quat){rot[0], rot[1], rot[2], rot[3]};
+                            }
+                        }
+                    } else if (channel->target_path == cgltf_animation_path_type_scale) {
+                        clip_channel->scale_keyframe_count = sampler->output->count;
+                        clip_channel->scale_keyframes = (Vec3*)malloc(sampler->output->count * sizeof(Vec3));
+                        if (clip_channel->scale_keyframes) {
+                            for (cgltf_size k = 0; k < sampler->output->count; k++) {
+                                cgltf_accessor_read_float(sampler->output, k, &clip_channel->scale_keyframes[k].x, 3);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        printf("glTF: Loaded %u animations from %u skeletons\n", 
+               result->animation_count, result->skeleton_count);
+    }
+
     cgltf_free(data);
 
     if (result->mesh_count == 0) {

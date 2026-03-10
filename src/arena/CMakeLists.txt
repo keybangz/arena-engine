@@ -35,6 +35,8 @@ add_library(arena-core STATIC
     game/item.c
     game/camera_system.h
     game/camera_system.c
+    game/animation_system.h
+    game/animation_system.c
     map/map.h
     map/map.c
     world/world.h

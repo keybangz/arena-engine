@@ -5,34 +5,15 @@
 #include <stdbool.h>
 #include <stddef.h>
 
+// Math includes
+#include "../math/math.h"
+
 // Forward declarations
 typedef struct Arena Arena;
-typedef struct World World;
+typedef struct AnimationManager AnimationManager; // Forward declare AnimationManager
 
-// ============================================================================
-// Entity
-// ============================================================================
-
-#define ENTITY_INDEX_BITS    20
-#define ENTITY_INDEX_MASK    ((1 << ENTITY_INDEX_BITS) - 1)
-#define ENTITY_GENERATION_BITS 12
-#define ENTITY_GENERATION_MASK ((1 << ENTITY_GENERATION_BITS) - 1)
-#define MAX_ENTITIES         (1 << ENTITY_INDEX_BITS)  // ~1 million entities
-
-// Entity handle - combines index and generation for safe references
-typedef struct Entity {
-    uint32_t id;  // Lower 20 bits: index, Upper 12 bits: generation
-} Entity;
-
-#define ENTITY_NULL ((Entity){0})
-
-static inline uint32_t entity_index(Entity e) { return e.id & ENTITY_INDEX_MASK; }
-static inline uint32_t entity_generation(Entity e) { return (e.id >> ENTITY_INDEX_BITS) & ENTITY_GENERATION_MASK; }
-static inline Entity entity_make(uint32_t index, uint32_t gen) {
-    return (Entity){(index & ENTITY_INDEX_MASK) | ((gen & ENTITY_GENERATION_MASK) << ENTITY_INDEX_BITS)};
-}
-static inline bool entity_is_null(Entity e) { return e.id == 0; }
-static inline bool entity_equals(Entity a, Entity b) { return a.id == b.id; }
+// Maximum bones per skinned mesh (copied from components_3d.h to avoid circular include)
+#define MAX_BONES_PER_MESH 64
 
 // ============================================================================
 // Component Types
@@ -62,11 +43,7 @@ static inline ComponentMask component_mask_remove(ComponentMask mask, ComponentT
     return mask & ~component_mask(type);
 }
 
-// ============================================================================
 // Built-in Component Types
-// ============================================================================
-
-// Component type IDs (registered at world creation)
 typedef enum ComponentTypeId {
     // 2D Components
     COMPONENT_TRANSFORM = 0,
@@ -85,8 +62,86 @@ typedef enum ComponentTypeId {
     COMPONENT_LIGHT,
     COMPONENT_SKINNED_MESH,
 
+    // Animation system (v0.9.0+)
+    COMPONENT_ANIMATION_STATE,
+
     COMPONENT_TYPE_COUNT  // Must be last
 } ComponentTypeId;
+
+// ============================================================================
+// Entity
+// ============================================================================
+
+#define ENTITY_INDEX_BITS    20
+#define ENTITY_INDEX_MASK    ((1 << ENTITY_INDEX_BITS) - 1)
+#define ENTITY_GENERATION_BITS 12
+#define ENTITY_GENERATION_MASK ((1 << ENTITY_GENERATION_BITS) - 1)
+#define MAX_ENTITIES         (1 << ENTITY_INDEX_BITS)  // ~1 million entities
+
+// Entity handle - combines index and generation for safe references
+typedef struct Entity {
+    uint32_t id;  // Lower 20 bits: index, Upper 12 bits: generation
+} Entity;
+
+#define ENTITY_NULL ((Entity){0})
+
+static inline uint32_t entity_index(Entity e) { return e.id & ENTITY_INDEX_MASK; }
+static inline uint32_t entity_generation(Entity e) { return (e.id >> ENTITY_INDEX_BITS) & ENTITY_GENERATION_MASK; }
+static inline Entity entity_make(uint32_t index, uint32_t gen) {
+    return (Entity){(index & ENTITY_INDEX_MASK) | ((gen & ENTITY_GENERATION_MASK) << ENTITY_INDEX_BITS)};
+}
+static inline bool entity_is_null(Entity e) { return e.id == 0; }
+static inline bool entity_equals(Entity a, Entity b) { return a.id == b.id; }
+
+// ============================================================================
+// Systems
+// ============================================================================
+
+// Forward declaration of World for SystemFn
+typedef struct World World;
+
+// System function signature
+typedef void (*SystemFn)(World* world, float dt);
+
+#define MAX_SYSTEMS 32 // Max number of systems
+
+typedef struct System {
+    SystemFn fn;
+    ComponentMask required;
+} System;
+
+// ============================================================================
+// World Structure
+// ============================================================================
+
+struct World {
+    Arena* arena;
+    uint32_t max_entities;
+    uint32_t entity_count;
+
+    // Entity data (parallel arrays)
+    uint8_t* generations;      // Generation counter per slot
+    ComponentMask* masks;      // Component mask per entity
+
+    // Free list for recycling entity slots
+    uint32_t* free_list;
+    uint32_t free_count;
+    uint32_t next_index;       // Next unused index
+
+    // Component storage (sparse arrays)
+    void* components[COMPONENT_TYPE_COUNT];
+
+    // Animation manager (v0.9.0+)
+    AnimationManager* animation_mgr; // Use forward declared type
+
+    // Systems
+    System systems[MAX_SYSTEMS];
+    uint32_t system_count;
+};
+
+// ============================================================================
+// Component Definitions (after World struct)
+// ============================================================================
 
 // Transform component
 typedef struct Transform {
@@ -141,8 +196,32 @@ typedef struct Team {
     uint8_t team_id;
 } Team;
 
+// Animation state component
+typedef struct AnimationState {
+    Entity entity;          // Entity this state belongs to
+    
+    uint32_t current_clip_id;    // Currently playing animation
+    float current_time;         // Current playback time
+    float playback_speed;       // Speed multiplier
+    bool is_playing;            // Is animation currently playing?
+    bool is_looping;           // Should the current clip loop?
+    
+    // Blending state
+    uint32_t blend_from_clip_id; // Animation blending from
+    float blend_start_time;     // When blending started
+    float blend_duration;       // How long blending should take
+    float blend_factor;         // Current blend factor (0-1)
+    
+    // Resulting bone matrices (sent to GPU)
+    Mat4 bone_matrices[MAX_BONES_PER_MESH];
+    uint32_t active_bone_count; // Number of bones actually animated
+} AnimationState;
+
+#define world_add_animation_state(w, e)   ((AnimationState*)world_add_component(w, e, COMPONENT_ANIMATION_STATE))
+#define world_get_animation_state(w, e)  ((AnimationState*)world_get_component(w, e, COMPONENT_ANIMATION_STATE))
+
 // ============================================================================
-// World (ECS Container)
+// World API
 // ============================================================================
 
 // World creation/destruction
@@ -189,6 +268,9 @@ void world_remove_component(World* world, Entity entity, ComponentType type);
 #define world_get_light(w, e)          ((Light*)world_get_component(w, e, COMPONENT_LIGHT))
 #define world_get_skinned_mesh(w, e)   ((SkinnedMesh*)world_get_component(w, e, COMPONENT_SKINNED_MESH))
 
+// Maximum bones per skinned mesh (copied from components_3d.h to avoid circular include)
+#define MAX_BONES_PER_MESH 64
+
 // ============================================================================
 // Query (Iterate entities with specific components)
 // ============================================================================
@@ -208,15 +290,8 @@ Query world_query_exclude(World* world, ComponentMask required, ComponentMask ex
 bool query_next(Query* query, Entity* out_entity);
 void query_reset(Query* query);
 
-// ============================================================================
-// Systems
-// ============================================================================
-
-// System function signature
-typedef void (*SystemFn)(World* world, float dt);
-
 // System registration
-void world_register_system(World* world, const char* name, SystemFn fn, ComponentMask required);
+void world_register_system(World* world, SystemFn fn, ComponentMask required);
 void world_run_systems(World* world, float dt);
 
 #endif

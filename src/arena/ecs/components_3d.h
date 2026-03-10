@@ -2,6 +2,7 @@
 #define ARENA_COMPONENTS_3D_H
 
 #include "../math/math.h"
+#include "ecs.h"
 #include <stdint.h>
 #include <stdbool.h>
 
