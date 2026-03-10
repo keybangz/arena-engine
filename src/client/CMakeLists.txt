@@ -38,3 +38,15 @@ target_link_libraries(arena-test-animation
 
 target_compile_options(arena-test-animation PRIVATE -Wall -Wextra -Wpedantic -g)
 
+# Character Model Loading Test
+add_executable(arena-test-character
+    test_character_load.c
+)
+
+target_link_libraries(arena-test-character
+    PRIVATE arena-core
+    PRIVATE m
+)
+
+target_compile_options(arena-test-character PRIVATE -Wall -Wextra -Wpedantic -g)
+
