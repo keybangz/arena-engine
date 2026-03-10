@@ -609,3 +609,175 @@ const char* gltf_get_extension(const char* filepath) {
     return dot ? dot : "";
 }
 
+// ============================================================================
+// Animation Loading Functions
+// ============================================================================
+
+/**
+ * Find skeleton by name in glTF result
+ */
+int32_t gltf_find_skeleton(const GltfLoadResult* result, const char* name) {
+    if (!result || !name) return -1;
+    
+    for (uint32_t i = 0; i < result->skeleton_count; i++) {
+        if (strcmp(result->skeletons[i].name, name) == 0) {
+            return (int32_t)i;
+        }
+    }
+    return -1;
+}
+
+/**
+ * Find animation clip by name in glTF result
+ */
+int32_t gltf_find_animation(const GltfLoadResult* result, const char* name) {
+    if (!result || !name) return -1;
+    
+    for (uint32_t i = 0; i < result->animation_count; i++) {
+        if (strcmp(result->animations[i].name, name) == 0) {
+            return (int32_t)i;
+        }
+    }
+    return -1;
+}
+
+/**
+ * Load animations and skeletons from glTF result into AnimationManager
+ * 
+ * This function:
+ * 1. Loads each skeleton in the glTF result into the animation manager
+ * 2. Converts each glTF animation clip to internal AnimationClip format
+ * 3. Loads all clips into the animation manager
+ * 
+ * @param mgr           Animation manager to load into
+ * @param result        glTF load result with animation data
+ * @param skeleton_id   Output: ID of loaded skeleton (typically 0)
+ * @return              Number of animation clips loaded, or -1 on error
+ */
+int32_t gltf_load_animations(AnimationManager* mgr, const GltfLoadResult* result, uint32_t* skeleton_id) {
+    if (!mgr || !result || !skeleton_id) {
+        fprintf(stderr, "gltf_load_animations: Invalid arguments\n");
+        return -1;
+    }
+    
+    if (result->skeleton_count == 0 || result->animation_count == 0) {
+        fprintf(stderr, "gltf_load_animations: No skeletons or animations in glTF result\n");
+        return -1;
+    }
+    
+    // Load first skeleton (most models have only one)
+    GltfSkeleton* gltf_skel = &result->skeletons[0];
+    
+    // Create BoneNode array for AnimationManager
+    BoneNode* bones = (BoneNode*)malloc(gltf_skel->bone_count * sizeof(BoneNode));
+    if (!bones) {
+        fprintf(stderr, "gltf_load_animations: Failed to allocate bone array\n");
+        return -1;
+    }
+    
+    // Initialize bone nodes
+    for (uint32_t i = 0; i < gltf_skel->bone_count; i++) {
+        bones[i].index = i;
+        bones[i].name = gltf_skel->bone_names[i];
+        bones[i].parent_index = gltf_skel->parent_indices[i];
+        bones[i].bind_matrix = gltf_skel->bind_matrices[i];
+        bones[i].inverse_bind_matrix = gltf_skel->inverse_bind_matrices[i];
+        bones[i].is_animated = false;
+    }
+    
+    // Load skeleton into animation manager
+    *skeleton_id = animation_manager_load_skeleton(mgr, gltf_skel->name, bones,
+                                                    gltf_skel->bone_count,
+                                                    gltf_skel->root_bone_index);
+    
+    free(bones);
+    
+    if (*skeleton_id == 0) {
+        fprintf(stderr, "gltf_load_animations: Failed to load skeleton\n");
+        return -1;
+    }
+    
+    printf("gltf_load_animations: Loaded skeleton '%s' with %u bones\n",
+           gltf_skel->name, gltf_skel->bone_count);
+    
+    // Load animation clips
+    int32_t loaded_count = 0;
+    
+    for (uint32_t a = 0; a < result->animation_count; a++) {
+        GltfAnimationClip* gltf_clip = &result->animations[a];
+        
+        // Create AnimationChannel array for AnimationManager
+        AnimationChannel* channels = (AnimationChannel*)malloc(gltf_clip->channel_count * sizeof(AnimationChannel));
+        if (!channels) {
+            fprintf(stderr, "gltf_load_animations: Failed to allocate channels for clip %u\n", a);
+            continue;
+        }
+        
+        // Convert glTF channels to internal format
+        for (uint32_t c = 0; c < gltf_clip->channel_count; c++) {
+            GltfAnimationChannel* gltf_chan = &gltf_clip->channels[c];
+            AnimationChannel* chan = &channels[c];
+            
+            chan->bone_index = gltf_chan->bone_index;
+            
+            // Copy position keyframes
+            chan->position_count = gltf_chan->position_keyframe_count;
+            chan->position_keyframes = (AnimationKeyframe*)malloc(
+                gltf_chan->position_keyframe_count * sizeof(AnimationKeyframe));
+            if (chan->position_keyframes) {
+                for (uint32_t k = 0; k < gltf_chan->position_keyframe_count; k++) {
+                    chan->position_keyframes[k].time = gltf_chan->time_keyframes[k];
+                    chan->position_keyframes[k].position = gltf_chan->position_keyframes[k];
+                }
+            }
+            
+            // Copy rotation keyframes
+            chan->rotation_count = gltf_chan->rotation_keyframe_count;
+            chan->rotation_keyframes = (AnimationKeyframe*)malloc(
+                gltf_chan->rotation_keyframe_count * sizeof(AnimationKeyframe));
+            if (chan->rotation_keyframes) {
+                for (uint32_t k = 0; k < gltf_chan->rotation_keyframe_count; k++) {
+                    chan->rotation_keyframes[k].time = gltf_chan->time_keyframes[k];
+                    chan->rotation_keyframes[k].rotation = gltf_chan->rotation_keyframes[k];
+                }
+            }
+            
+            // Copy scale keyframes
+            chan->scale_count = gltf_chan->scale_keyframe_count;
+            chan->scale_keyframes = (AnimationKeyframe*)malloc(
+                gltf_chan->scale_keyframe_count * sizeof(AnimationKeyframe));
+            if (chan->scale_keyframes) {
+                for (uint32_t k = 0; k < gltf_chan->scale_keyframe_count; k++) {
+                    chan->scale_keyframes[k].time = gltf_chan->time_keyframes[k];
+                    chan->scale_keyframes[k].scale = gltf_chan->scale_keyframes[k];
+                }
+            }
+        }
+        
+        // Load clip into animation manager
+        uint32_t clip_id = animation_manager_load_clip(mgr, gltf_clip->name,
+                                                       gltf_clip->duration,
+                                                       channels,
+                                                       gltf_clip->channel_count);
+        
+        // Free temporary channel data (AnimationManager copies it)
+        for (uint32_t c = 0; c < gltf_clip->channel_count; c++) {
+            free(channels[c].position_keyframes);
+            free(channels[c].rotation_keyframes);
+            free(channels[c].scale_keyframes);
+        }
+        free(channels);
+        
+        if (clip_id != 0) {
+            loaded_count++;
+            printf("gltf_load_animations: Loaded clip '%s' (%.2fs, %u channels)\n",
+                   gltf_clip->name, gltf_clip->duration, gltf_clip->channel_count);
+        } else {
+            fprintf(stderr, "gltf_load_animations: Failed to load clip '%s'\n", gltf_clip->name);
+        }
+    }
+    
+    printf("gltf_load_animations: Successfully loaded %d animation clips\n", loaded_count);
+    return loaded_count;
+}
+
